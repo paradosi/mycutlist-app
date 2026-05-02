@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- React 19 `react-hooks/set-state-in-effect` violations in
+  `OptimizerControls` (kerf draft sync), `PartListEditor` (`DimensionCell`),
+  and `SheetStockManager` (`AddSheetDialog` preset/unit sync) — replaced each
+  `useEffect` with the React 19 prevKey "adjust state during render" pattern.
+  Eliminates cascading renders.
+- Removed redundant `hydrated` SSR-gate state on `PdfDownloadButton` —
+  `dynamic({ ssr: false })` already gates it client-side, so the extra
+  `useState` + `useEffect` were a no-op.
+- Removed unused `eslint-disable no-console` directive in
+  `useMaterialSelfHeal`.
+- Fixed mistaken `useState` destructuring in `CsvImportDialog`'s
+  `PreviewBlock`.
+
+### Changed
+
+- `pnpm-workspace.yaml` — whitelisted `sharp` and `unrs-resolver` build
+  scripts via `onlyBuiltDependencies`; disabled `verifyDepsBeforeRun` and
+  `confirmModulesPurge` so non-interactive runs don't stall on TTY
+  confirmations.
+- Added `.npmrc` with the same pre-check disables as a fallback.
+
 ## [0.1.0] — 2026-05-01
 
 Initial Phase 1 implementation. Working end-to-end: define materials, sheets,
