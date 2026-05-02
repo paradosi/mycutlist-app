@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Live app
+    url: https://mycutlist.app
+    about: Try MyCutList in your browser — no account needed.
+  - name: Source + license
+    url: https://github.com/paradosi/mycutlist-app
+    about: Read the AGPL-3.0 source, fork it, or self-host.
