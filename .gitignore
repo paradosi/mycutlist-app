@@ -50,3 +50,7 @@ Thumbs.db
 
 # Claude Code project context (kept local, not published)
 /CLAUDE.md
+
+# Playwright MCP cache and ad-hoc smoke-test screenshots
+.playwright-mcp/
+/mycutlist-app-*.png
