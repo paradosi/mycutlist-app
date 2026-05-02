@@ -1,0 +1,61 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node *)",
+      "Bash(npm *)",
+      "Bash(npx *)",
+      "Bash(pnpm *)",
+      "Bash(gh *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git branch *)",
+      "Bash(git checkout *)",
+      "Bash(git push)",
+      "Bash(git push *)",
+      "Bash(git pull *)",
+      "Bash(curl -s *)",
+      "Bash(curl -I *)",
+      "Read",
+      "Edit",
+      "Write",
+      "Glob",
+      "Grep",
+      "Agent(Explore)",
+      "Agent(Plan)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(git push --force *)",
+      "Bash(git reset --hard *)",
+      "Bash(pnpm publish*)",
+      "Edit(.env)",
+      "Edit(.env.local)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$(git rev-parse --show-toplevel 2>/dev/null || echo .)\" && file=\"$CLAUDE_TOOL_INPUT_PATH\" && [[ \"$file\" == *.ts || \"$file\" == *.tsx ]] && pnpm tsc --noEmit --skipLibCheck 2>&1 | head -20 || true",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cmd=\"$CLAUDE_TOOL_INPUT_COMMAND\"; if echo \"$cmd\" | grep -qE 'DROP TABLE|DELETE FROM|TRUNCATE'; then echo '{\"block\": true, \"message\": \"Destructive DB command blocked — run manually if intentional\"}' >&2; exit 2; fi",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
