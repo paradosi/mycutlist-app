@@ -92,13 +92,17 @@ export function CsvImportDialog({
 
   const handleImport = () => {
     if (!preview) return
-    // 1. Create any new materials
+    // 1. Create any new materials, copying defaults from the user's existing
+    // first material when available (better hint than hardcoded 3/4" plywood).
+    const template = materials[0]
+    const defaultThickness = template?.thicknessMm ?? 19.05
+    const defaultHasGrain = template?.hasGrain ?? true
     const createdMap = new Map<string, string>() // name → newly created id
     for (const name of preview.newMaterialNames) {
       const id = addMaterial({
         name,
-        thicknessMm: 19.05,
-        hasGrain: true,
+        thicknessMm: defaultThickness,
+        hasGrain: defaultHasGrain,
       })
       createdMap.set(name.toLowerCase(), id)
     }
@@ -184,19 +188,71 @@ function DialogShell({
   onCancel: () => void
   wide?: boolean
 }) {
+  const cardRef = React.useRef<HTMLDivElement>(null)
+
+  React.useEffect(() => {
+    const previousActive = document.activeElement as HTMLElement | null
+
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onCancel()
+        return
+      }
+      if (e.key !== 'Tab' || !cardRef.current) return
+      const focusable = cardRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )
+      if (focusable.length === 0) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', handleKey)
+    cardRef.current
+      ?.querySelector<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])',
+      )
+      ?.focus()
+
+    return () => {
+      document.removeEventListener('keydown', handleKey)
+      previousActive?.focus?.()
+    }
+  }, [onCancel])
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <Card className={wide ? 'w-full max-w-3xl' : 'w-full max-w-md'}>
-        <CardHeader className="flex items-center justify-between">
-          <CardTitle>{title}</CardTitle>
-          <Button variant="ghost" size="sm" onClick={onCancel}>
-            ✕
-          </Button>
-        </CardHeader>
-        <CardContent className="max-h-[70vh] space-y-3 overflow-y-auto">
-          {children}
-        </CardContent>
-      </Card>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onCancel}
+    >
+      <div
+        ref={cardRef}
+        onClick={(e) => e.stopPropagation()}
+        className={wide ? 'w-full max-w-3xl' : 'w-full max-w-md'}
+      >
+        <Card>
+          <CardHeader className="flex items-center justify-between">
+            <CardTitle>{title}</CardTitle>
+            <Button variant="ghost" size="sm" onClick={onCancel} aria-label="Close">
+              ✕
+            </Button>
+          </CardHeader>
+          <CardContent className="max-h-[70vh] space-y-3 overflow-y-auto">
+            {children}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

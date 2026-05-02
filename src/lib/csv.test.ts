@@ -184,7 +184,7 @@ describe('buildPreview', () => {
     expect(result.rows[1].quantity).toBe(1)
   })
 
-  it('clamps qty to 999', () => {
+  it('clamps qty to 999 and warns', () => {
     const result = buildPreview({
       rows: [baseRow({ Qty: '5000' })],
       mapping,
@@ -192,6 +192,7 @@ describe('buildPreview', () => {
       unit: 'in',
     })
     expect(result.rows[0].quantity).toBe(999)
+    expect(result.rows[0].warnings.some((w) => /clamp/i.test(w))).toBe(true)
   })
 })
 
@@ -233,5 +234,33 @@ describe('partsToCsv', () => {
     ]
     const csv = partsToCsv({ parts, materials: [MATERIAL], unit: 'mm' })
     expect(csv).toContain('"Side, ""front"""')
+  })
+
+  it('skips parts whose materialId no longer resolves', () => {
+    const parts: Part[] = [
+      {
+        id: 'p1',
+        label: 'Good',
+        materialId: MATERIAL.id,
+        widthMm: 100,
+        heightMm: 100,
+        quantity: 1,
+        grain: 'none',
+        rotationLocked: false,
+      },
+      {
+        id: 'p2',
+        label: 'Orphan',
+        materialId: 'nonexistent-id',
+        widthMm: 50,
+        heightMm: 50,
+        quantity: 1,
+        grain: 'none',
+        rotationLocked: false,
+      },
+    ]
+    const csv = partsToCsv({ parts, materials: [MATERIAL], unit: 'mm' })
+    expect(csv).toContain('Good')
+    expect(csv).not.toContain('Orphan')
   })
 })

@@ -145,16 +145,21 @@ export function buildPreview({
       return
     }
 
+    const warnings: string[] = []
+
     const qtyRaw = get('qty')
-    let quantity = qtyRaw === '' ? 1 : Number(qtyRaw)
-    if (!Number.isFinite(quantity) || quantity < 1) quantity = 1
-    quantity = Math.min(999, Math.floor(quantity))
+    let parsedQty = qtyRaw === '' ? 1 : Number(qtyRaw)
+    if (!Number.isFinite(parsedQty) || parsedQty < 1) parsedQty = 1
+    parsedQty = Math.floor(parsedQty)
+    const quantity = Math.min(999, parsedQty)
+    if (parsedQty > 999) {
+      warnings.push(`qty ${parsedQty} clamped to 999`)
+    }
 
     const grainRaw = get('grain')
     const grain = normalizeGrain(grainRaw)
 
     const matRaw = get('material')
-    const warnings: string[] = []
     let materialId = ''
     let materialName = ''
     if (matRaw) {
@@ -227,13 +232,14 @@ export function partsToCsv({ parts, materials, unit }: ExportOpts): string {
   const lines = [headers.map(csvEscape).join(',')]
   for (const p of parts) {
     const mat = materials.find((m) => m.id === p.materialId)
+    if (!mat) continue
     lines.push(
       [
         csvEscape(p.label),
         csvEscape(formatFromMm(p.widthMm, unit)),
         csvEscape(formatFromMm(p.heightMm, unit)),
         csvEscape(String(p.quantity)),
-        csvEscape(mat?.name ?? ''),
+        csvEscape(mat.name),
         csvEscape(p.grain),
       ].join(','),
     )
