@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Live deployment** — public preview at [mycutlist.app](https://mycutlist.app)
+  on Cloudflare Workers Static Assets (global CDN). Static export via
+  `output: 'export'`, deployed via Workers Builds + `wrangler.jsonc`.
+- **Feedback button** in the header — opens a labeled GitHub issue with
+  structured templates (bug / feature / feedback chooser) at
+  `paradosi/mycutlist-app`.
+- **Branded PDF footer** — every PDF page now shows
+  `Generated with MyCutList · mycutlist.app` on the left and `pageNumber /
+  totalPages` on the right (8pt neutral, fixed across all page types).
+- **Security headers** via `public/_headers`: HSTS preload, scoped CSP,
+  COOP/CORP same-origin, X-Frame-Options DENY, X-Content-Type-Options
+  nosniff, Referrer-Policy strict-origin-when-cross-origin,
+  Permissions-Policy with camera/mic/geo/FLoC/Topics off. Plus 1-year
+  immutable cache on `/_next/static/*`.
+
+### Changed
+
+- Brand: project renamed `cutlist-optimizer` → **MyCutList**, GitHub repo
+  is now `paradosi/mycutlist-app`. Internal storage identifiers
+  (`localStorage` keys, IDB `DB_NAME`) keep the legacy `cutlist-optimizer:`
+  prefix to avoid orphaning any existing browser data.
+- Source-of-truth moved from GitLab homelab to GitHub `paradosi/`.
+- `<title>` and `<meta description>` replaced from the Next.js scaffold
+  defaults to brand-accurate copy.
+- `pnpm-workspace.yaml` — whitelisted `sharp` and `unrs-resolver` build
+  scripts via `onlyBuiltDependencies`; disabled `verifyDepsBeforeRun` and
+  `confirmModulesPurge` so non-interactive runs don't stall on TTY
+  confirmations. Added `package.json#packageManager: pnpm@11.0.3` so
+  Cloudflare Workers Builds uses the same pnpm as local.
+- Added `.npmrc` with the same pre-check disables as a fallback.
+
 ### Fixed
 
 - React 19 `react-hooks/set-state-in-effect` violations in
@@ -21,14 +54,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `useMaterialSelfHeal`.
 - Fixed mistaken `useState` destructuring in `CsvImportDialog`'s
   `PreviewBlock`.
+- CSV import dialog now warns when a row's qty is clamped to 999 instead
+  of silently truncating; `partsToCsv` skips parts whose `materialId` no
+  longer resolves (defensive against round-trip data loss).
+- CSV import dialog accessibility: Escape closes, click on backdrop
+  closes, focus moves into the dialog on mount, focus is trapped via
+  Tab/Shift+Tab, focus restored to the trigger on close.
+- CSV import auto-creates new materials with `thicknessMm`/`hasGrain`
+  copied from the user's first existing material instead of hardcoded
+  3/4" plywood defaults.
 
-### Changed
+### Security
 
-- `pnpm-workspace.yaml` — whitelisted `sharp` and `unrs-resolver` build
-  scripts via `onlyBuiltDependencies`; disabled `verifyDepsBeforeRun` and
-  `confirmModulesPurge` so non-interactive runs don't stall on TTY
-  confirmations.
-- Added `.npmrc` with the same pre-check disables as a fallback.
+- Patched `postcss` CVE [GHSA-qx2v-qp2m-jg93](https://github.com/advisories/GHSA-qx2v-qp2m-jg93)
+  (XSS via unescaped `</style>` in stringify output) by pinning
+  `pnpm.overrides.postcss: ">=8.5.10"`. Build-toolchain only, zero
+  runtime risk for a static export, but `pnpm audit` is now clean.
 
 ## [0.1.0] — 2026-05-01
 
