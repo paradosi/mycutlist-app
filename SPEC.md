@@ -40,7 +40,7 @@ pnpm dlx shadcn@latest add button input label select dialog \
 
 ## Types (src/types/index.ts)
 
-Implement ALL types listed in CLAUDE.md under "Core Data Types". Also add:
+The canonical type definitions live in `src/types/index.ts`. The full set covers `Unit`, `Grain`, `CutStrategy`, `Algorithm`, `Material`, `Sheet`, `Part`, `Project`, plus the optimizer-specific types below:
 
 ```ts
 interface Placement {
