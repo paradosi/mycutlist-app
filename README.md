@@ -1,4 +1,4 @@
-# CutList Optimizer
+# MyCutList
 
 A free, client-side 2D sheet-goods cut list optimizer for woodworkers and DIYers.
 Enter your sheet stock, enter your parts, click **Optimize**, and get a printable
@@ -7,7 +7,7 @@ PDF cut sheet with the layout drawn for every sheet.
 No login. No usage caps. Works offline once loaded.
 
 - **Live:** [mycutlist.app](https://mycutlist.app)
-- **Source:** [github.com/paradosi/cutlist-optimizer](https://github.com/paradosi/cutlist-optimizer)
+- **Source:** [github.com/paradosi/mycutlist-app](https://github.com/paradosi/mycutlist-app)
 - **License:** [AGPL-3.0](LICENSE)
 
 ## Why another one

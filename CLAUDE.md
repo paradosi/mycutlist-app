@@ -1,9 +1,9 @@
-# CutList Optimizer — Project CLAUDE.md
+# MyCutList — Project CLAUDE.md
 
 ## What This Is
 An open-source, client-side-first 2D sheet goods cut list optimizer for woodworkers and DIYers.
 Differentiators: fully free/unlimited, offline PWA, drag-to-adjust after optimization, persistent offcut inventory.
-License: AGPL-3.0. Repo name: `cutlist-optimizer`.
+License: AGPL-3.0. Repo: `paradosi/mycutlist-app` on GitHub. Live at `mycutlist.app`.
 
 ## Stack
 - **Framework:** Next.js 15 (App Router, TypeScript strict)

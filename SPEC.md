@@ -1,4 +1,4 @@
-# CutList Optimizer — Phase 1 Spec
+# MyCutList — Phase 1 Spec
 
 ## Goal
 Ship a working, publicly accessible web app where a woodworker can:
@@ -15,14 +15,14 @@ No login required. Works offline. No usage caps.
 
 ### Package setup
 ```bash
-pnpm create next-app@latest cutlist-optimizer \
+pnpm create next-app@latest mycutlist-app \
   --typescript \
   --tailwind \
   --eslint \
   --app \
   --src-dir \
   --import-alias "@/*"
-cd cutlist-optimizer
+cd mycutlist-app
 pnpm add zustand immer idb zod react-hook-form @hookform/resolvers \
   @tanstack/react-table @react-pdf/renderer comlink
 pnpm add -D vitest @vitest/ui fast-check @playwright/test \

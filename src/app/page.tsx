@@ -103,7 +103,7 @@ export default function Home() {
       <header className="border-b border-neutral-200 bg-white">
         <div className="mx-auto flex max-w-[1800px] items-center justify-between px-6 py-3">
           <div className="flex items-center gap-3">
-            <h1 className="text-base font-semibold">CutList Optimizer</h1>
+            <h1 className="text-base font-semibold">MyCutList</h1>
             <span className="hidden text-xs text-neutral-500 md:inline">
               Phase 1 preview
             </span>
