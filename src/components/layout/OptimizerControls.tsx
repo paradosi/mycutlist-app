@@ -31,10 +31,14 @@ export function OptimizerControls({
   const [kerfDraft, setKerfDraft] = React.useState(() =>
     formatFromMm(project.kerfMm, project.unit, 32),
   )
-
-  React.useEffect(() => {
+  const [prevKerfKey, setPrevKerfKey] = React.useState(
+    `${project.kerfMm}-${project.unit}`,
+  )
+  const kerfKey = `${project.kerfMm}-${project.unit}`
+  if (prevKerfKey !== kerfKey) {
+    setPrevKerfKey(kerfKey)
     setKerfDraft(formatFromMm(project.kerfMm, project.unit, 32))
-  }, [project.kerfMm, project.unit])
+  }
 
   const commitKerf = () => {
     try {

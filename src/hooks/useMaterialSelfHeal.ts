@@ -36,7 +36,6 @@ export function useMaterialSelfHeal(): void {
       }
     }
     if (repaired > 0 && typeof window !== 'undefined') {
-      // eslint-disable-next-line no-console
       console.warn(
         `[cutlist] repaired ${repaired} part/sheet entries with invalid materialId; defaulted to "${materials[0].name}"`,
       )

@@ -33,10 +33,12 @@ interface DimensionCellProps {
 function DimensionCell({ value, unit, onCommit }: DimensionCellProps) {
   const [draft, setDraft] = React.useState(() => formatFromMm(value, unit, 32))
   const [error, setError] = React.useState<string | null>(null)
-
-  React.useEffect(() => {
+  const [prevKey, setPrevKey] = React.useState(`${value}-${unit}`)
+  const currentKey = `${value}-${unit}`
+  if (prevKey !== currentKey) {
+    setPrevKey(currentKey)
     setDraft(formatFromMm(value, unit, 32))
-  }, [value, unit])
+  }
 
   const commit = () => {
     try {

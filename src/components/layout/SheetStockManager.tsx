@@ -145,12 +145,18 @@ function AddSheetDialog({ materials, unit, onAdd, onCancel }: AddSheetDialogProp
   const [materialId, setMaterialId] = React.useState(materials[0]?.id ?? '')
   const [error, setError] = React.useState<string | null>(null)
 
-  React.useEffect(() => {
-    if (presetIndex === 'custom') return
-    const p = SHEET_PRESETS[presetIndex]
-    setWidthInput(formatFromMm(p.widthMm, unit, 32))
-    setHeightInput(formatFromMm(p.heightMm, unit, 32))
-  }, [presetIndex, unit])
+  const [prevPresetKey, setPrevPresetKey] = React.useState(
+    `${presetIndex}-${unit}`,
+  )
+  const presetKey = `${presetIndex}-${unit}`
+  if (prevPresetKey !== presetKey) {
+    setPrevPresetKey(presetKey)
+    if (presetIndex !== 'custom') {
+      const p = SHEET_PRESETS[presetIndex]
+      setWidthInput(formatFromMm(p.widthMm, unit, 32))
+      setHeightInput(formatFromMm(p.heightMm, unit, 32))
+    }
+  }
 
   const submit = () => {
     try {
