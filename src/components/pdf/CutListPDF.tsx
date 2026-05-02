@@ -47,7 +47,28 @@ const styles = StyleSheet.create({
     borderBottomColor: '#e5e5e5',
     paddingVertical: 3,
   },
+  footer: {
+    position: 'absolute',
+    bottom: 18,
+    left: PAGE_PADDING,
+    right: PAGE_PADDING,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    fontSize: 8,
+    color: '#a3a3a3',
+  },
 })
+
+function Footer() {
+  return (
+    <View style={styles.footer} fixed>
+      <Text>Generated with MyCutList · mycutlist.app</Text>
+      <Text
+        render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
+      />
+    </View>
+  )
+}
 
 // Per-sheet cut list keeps simple flex:1 columns. The BOM uses the
 // percentage widths the user requested.
@@ -180,6 +201,7 @@ export function CutListPDF({ project, materials }: CutListPDFProps) {
             )}
           </View>
         )}
+        <Footer />
       </Page>
 
       {/* ---------- Per-sheet pages ---------- */}
@@ -217,6 +239,7 @@ export function CutListPDF({ project, materials }: CutListPDFProps) {
             </View>
           ))}
         </View>
+        <Footer />
       </Page>
     </Document>
   )
@@ -295,6 +318,7 @@ function SheetPage({ packed, index, total, project, materials }: SheetPageProps)
         <Text style={styles.h2}>Cut list for this sheet</Text>
         <CutListTable rows={grouped} unit={project.unit} />
       </View>
+      <Footer />
     </Page>
   )
 }
