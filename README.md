@@ -6,6 +6,10 @@ PDF cut sheet with the layout drawn for every sheet.
 
 No login. No usage caps. Works offline once loaded.
 
+- **Live:** [mycutlist.app](https://mycutlist.app)
+- **Source:** [github.com/paradosi/cutlist-optimizer](https://github.com/paradosi/cutlist-optimizer)
+- **License:** [AGPL-3.0](LICENSE)
+
 ## Why another one
 
 Existing tools either gate basic features behind subscriptions or refuse to do
