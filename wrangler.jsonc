@@ -1,0 +1,9 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mycutlist-app",
+  "compatibility_date": "2025-04-23",
+  "assets": {
+    "directory": "./out",
+    "not_found_handling": "404-page"
+  }
+}
