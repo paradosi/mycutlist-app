@@ -1,36 +1,123 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CutList Optimizer
 
-## Getting Started
+A free, client-side 2D sheet-goods cut list optimizer for woodworkers and DIYers.
+Enter your sheet stock, enter your parts, click **Optimize**, and get a printable
+PDF cut sheet with the layout drawn for every sheet.
 
-First, run the development server:
+No login. No usage caps. Works offline once loaded.
+
+## Why another one
+
+Existing tools either gate basic features behind subscriptions or refuse to do
+multi-material projects. This one focuses on doing one thing well: produce
+optimized, physically-cuttable layouts for table saws, track saws, and panel
+saws — with a UI that explains every domain term inline.
+
+## Features (Phase 1)
+
+- **Parts editor** with inline editing, imperial fractions (`23 7/8`), decimal,
+  mm/cm/m suffixes, grain direction, per-row duplicate/delete
+- **Sheet stock manager** with presets (`4×8`, `5×5 Baltic`, `4×4`, `2520×1830 mm`)
+  and custom dimensions
+- **Materials library** persisted across projects — define your own stock types
+  with thickness, grain, and optional cost per sheet
+- **Guillotine optimizer** (Jylänki 2010 BSSF + MAXAS) running in a Web Worker
+  via comlink, with a retry pass that places small leftovers into earlier
+  sheets' free space rather than opening a new sheet
+- **Material isolation** — `3/4" plywood` parts only land on `3/4" plywood`
+  sheets; the optimizer respects the material on every part and sheet
+- **SVG renderer** with zoom/fit, per-sheet SVG export, kerf gap visualization
+- **PDF export** — cover page, one vector-drawn page per packed sheet (auto
+  portrait/landscape based on aspect ratio), shrink-to-fit text in small parts,
+  consolidated parts BOM
+- **CSV import/export** — auto-detects column headers (`Label`/`Name`/`Part`,
+  `L`/`Length`/`Long`, etc.), grain normalization, auto-creates missing
+  materials, preview before commit
+- **Cost stat** when materials have `costPerSheet` set
+- **IndexedDB persistence** — your project survives a refresh
+
+## Stack
+
+- Next.js 16 (App Router, Turbopack) · React 19 · TypeScript strict
+- Tailwind CSS v4
+- Zustand (with `immer` + `persist` middleware) · IndexedDB via `idb`
+- Zod schemas · `react-hook-form` form helpers · `@tanstack/react-table`
+- `@react-pdf/renderer` (vector SVG primitives) · `papaparse`
+- `comlink` Web Worker
+- Vitest + `fast-check` (property-based tests)
+
+## Local development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
+pnpm dev          # http://localhost:3000
+
+pnpm typecheck    # tsc --noEmit
+pnpm lint         # eslint
+pnpm test         # vitest run (unit + property-based)
+pnpm test:watch
+pnpm build        # next build (production)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Project layout
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+src/
+  app/                    Next.js App Router (root page, layout)
+  components/
+    ui/                   Hand-authored UI primitives (Button, Input, Select, ...)
+    layout/               PartListEditor, SheetStockManager, MaterialsEditor,
+                          OptimizerControls, CsvImportDialog
+    renderer/             SheetLayoutRenderer (on-screen SVG)
+    pdf/                  CutListPDF, SheetSvgPdf, PdfDownloadButton
+  lib/
+    optimizer/            guillotine.ts (algorithm), worker.ts (comlink expose)
+    store/                project.ts, materials.ts (Zustand + IDB persist)
+    db/                   idb-storage.ts (PersistStorage adapter)
+    csv.ts                CSV parsing, mapping, export
+    units.ts              parseToMm, formatFromMm, formatAreaFromMm2
+    colors.ts             FNV-1a hash → curated 12-color palette (UI + PDF share)
+    presets.ts            Common sheet sizes
+  hooks/
+    useOptimizer.ts       comlink wrapper around the worker
+    useMaterialSelfHeal.ts  Repairs stale materialIds from older project state
+  types/
+    index.ts              All shared TypeScript types
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Algorithm notes
 
-## Learn More
+The packer is a Guillotine bin packing implementation with:
 
-To learn more about Next.js, take a look at the following resources:
+- **Pre-sort** parts by descending area before placement (Jylänki §3.2)
+- **BSSF** (Best Short Side Fit) rectangle choice
+- **MAXAS** (Maximize Larger Area Split) split rule
+- **Pruning** of contained free rects after each split
+- **Material isolation** — parts only place on sheets of matching material
+- **Grain enforcement** — `with` parts never rotate, `across` always rotate,
+  `either`/`none` try both
+- **Retry pass** — after the main loop, every still-unplaced part gets one more
+  attempt against every existing packed sheet's leftover free rects, with an
+  in-place update of placements / cuts / offcuts / utilization
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The whole optimizer runs in a Web Worker so the main thread stays responsive
+during a calculation.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Roadmap
 
-## Deploy on Vercel
+**Phase 2 (planned):**
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- MaxRects algorithm (selectable via the existing dropdown)
+- Genetic-algorithm wrapper around guillotine for higher yield with rip-cut
+  preference
+- Konva drag-to-edit after optimize
+- Persistent offcut inventory across projects
+- Multi-project save/load library
+- PWA via `@serwist/next` (offline-first)
+- Optional Supabase sync for projects across devices
+- Cabinet-builder presets
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## License
+
+[AGPL-3.0](LICENSE) — free to use, modify, and self-host. Network-deployed
+forks must publish their source under AGPL too.
