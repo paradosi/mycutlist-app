@@ -13,12 +13,14 @@ import type { Algorithm, CutStrategy } from '@/types'
 
 interface OptimizerControlsProps {
   isRunning: boolean
+  canOptimize: boolean
   onOptimize: () => void
   onCancel: () => void
 }
 
 export function OptimizerControls({
   isRunning,
+  canOptimize,
   onOptimize,
   onCancel,
 }: OptimizerControlsProps) {
@@ -50,8 +52,11 @@ export function OptimizerControls({
   }
 
   const result = project.results
+  const hasResult =
+    !!result &&
+    (result.packedSheets.length > 0 || result.unplacedPartIds.length > 0)
   let stats: string | null = null
-  if (result) {
+  if (hasResult && result) {
     let totalCost = 0
     let anyCost = false
     for (const ps of result.packedSheets) {
@@ -71,6 +76,16 @@ export function OptimizerControls({
     if (anyCost) parts.push(`$${totalCost.toFixed(2)} material cost`)
     stats = parts.join(' · ')
   }
+
+  const noParts = project.parts.length === 0
+  const noSheets = project.sheets.length === 0
+  const reason = noParts && noSheets
+    ? 'Add at least one part and one sheet to optimize.'
+    : noParts
+      ? 'Add at least one part to optimize.'
+      : noSheets
+        ? 'Add at least one sheet to optimize.'
+        : null
 
   return (
     <div className="space-y-4">
@@ -169,7 +184,8 @@ export function OptimizerControls({
       <div className="flex gap-2">
         <Button
           onClick={onOptimize}
-          disabled={isRunning}
+          disabled={isRunning || !canOptimize}
+          title={!canOptimize && reason ? reason : undefined}
           size="lg"
           className="flex-1"
         >
@@ -181,6 +197,10 @@ export function OptimizerControls({
           </Button>
         )}
       </div>
+
+      {!canOptimize && reason && (
+        <p className="text-xs text-neutral-500">{reason}</p>
+      )}
 
       {stats && <p className="text-xs text-neutral-600">{stats}</p>}
     </div>

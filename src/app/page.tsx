@@ -77,7 +77,10 @@ export default function Home() {
   const [tab, setTab] = React.useState<Tab>('parts')
   const resultsRef = React.useRef<HTMLElement>(null)
 
+  const canOptimize = project.parts.length > 0 && project.sheets.length > 0
+
   const handleOptimize = async () => {
+    if (!canOptimize) return
     clearResults()
     const input: OptimizerInput = {
       parts: project.parts,
@@ -97,6 +100,9 @@ export default function Home() {
   }
 
   const liveResult = result ?? project.results
+  const hasResult =
+    !!liveResult &&
+    (liveResult.packedSheets.length > 0 || liveResult.unplacedPartIds.length > 0)
 
   return (
     <div className="flex min-h-screen flex-col bg-neutral-50 text-neutral-900">
@@ -194,6 +200,7 @@ export default function Home() {
             <div className="rounded-lg border border-neutral-200 bg-white p-4">
               <OptimizerControls
                 isRunning={isRunning}
+                canOptimize={canOptimize}
                 onOptimize={handleOptimize}
                 onCancel={cancel}
               />
@@ -221,7 +228,7 @@ export default function Home() {
             </div>
           )}
 
-          {!isRunning && !liveResult && (
+          {!isRunning && !hasResult && (
             <div className="flex h-72 items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 bg-white">
               <div className="text-center">
                 <div className="text-3xl">📐</div>
@@ -235,7 +242,7 @@ export default function Home() {
             </div>
           )}
 
-          {!isRunning && liveResult && (
+          {!isRunning && hasResult && liveResult && (
             <div className="space-y-4">
               <div className="flex items-center justify-between rounded-lg border border-neutral-200 bg-white p-4">
                 <div>
