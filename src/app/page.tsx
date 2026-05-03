@@ -10,6 +10,7 @@ import { PartListEditor } from '@/components/layout/PartListEditor'
 import { SheetStockManager } from '@/components/layout/SheetStockManager'
 import { MaterialsEditor } from '@/components/layout/MaterialsEditor'
 import { OptimizerControls } from '@/components/layout/OptimizerControls'
+import { UnplacedPartsCallout } from '@/components/layout/UnplacedPartsCallout'
 import { SheetLayoutRenderer } from '@/components/renderer/SheetLayoutRenderer'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -67,11 +68,12 @@ type Tab = 'parts' | 'sheets' | 'materials' | 'settings'
 export default function Home() {
   useMaterialSelfHeal()
   const project = useProjectStore((s) => s.project)
-  const materials = useMaterialsStore((s) => s.materials)
   const setProjectName = useProjectStore((s) => s.setProjectName)
   const setUnit = useProjectStore((s) => s.setUnit)
   const setResults = useProjectStore((s) => s.setResults)
   const clearResults = useProjectStore((s) => s.clearResults)
+  const updateSheet = useProjectStore((s) => s.updateSheet)
+  const setAlgorithm = useProjectStore((s) => s.setAlgorithm)
 
   const { optimize, cancel, isRunning, progress, result, error } = useOptimizer()
   const [tab, setTab] = React.useState<Tab>('parts')
@@ -79,16 +81,18 @@ export default function Home() {
 
   const canOptimize = project.parts.length > 0 && project.sheets.length > 0
 
-  const handleOptimize = async () => {
-    if (!canOptimize) return
+  const runOptimize = React.useCallback(async () => {
+    const p = useProjectStore.getState().project
+    const m = useMaterialsStore.getState().materials
+    if (p.parts.length === 0 || p.sheets.length === 0) return
     clearResults()
     const input: OptimizerInput = {
-      parts: project.parts,
-      sheets: project.sheets,
-      materials,
-      kerfMm: project.kerfMm,
-      cutStrategy: project.cutStrategy,
-      algorithm: project.algorithm,
+      parts: p.parts,
+      sheets: p.sheets,
+      materials: m,
+      kerfMm: p.kerfMm,
+      cutStrategy: p.cutStrategy,
+      algorithm: p.algorithm,
     }
     const r = await optimize(input)
     if (r) {
@@ -97,7 +101,22 @@ export default function Home() {
         resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       })
     }
-  }
+  }, [optimize, clearResults, setResults])
+
+  const handleOptimize = runOptimize
+
+  const handleAddSheet = React.useCallback(() => {
+    const sheets = useProjectStore.getState().project.sheets
+    if (sheets.length === 0) return
+    const dominant = [...sheets].sort((a, b) => b.quantity - a.quantity)[0]
+    updateSheet(dominant.id, { quantity: dominant.quantity + 1 })
+    void runOptimize()
+  }, [updateSheet, runOptimize])
+
+  const handleSwitchToMaxRects = React.useCallback(() => {
+    setAlgorithm('maxrects')
+    void runOptimize()
+  }, [setAlgorithm, runOptimize])
 
   const liveResult = result ?? project.results
   const hasResult =
@@ -240,19 +259,23 @@ export default function Home() {
 
           {!isRunning && hasResult && liveResult && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between rounded-lg border border-neutral-200 bg-white p-4">
-                <div>
-                  {liveResult.unplacedPartIds.length > 0 ? (
-                    <p className="text-sm text-red-600">
-                      {liveResult.unplacedPartIds.length} unplaced part
-                      {liveResult.unplacedPartIds.length === 1 ? '' : 's'}
-                    </p>
-                  ) : (
-                    <p className="text-sm text-neutral-600">
-                      All parts placed.
-                    </p>
-                  )}
-                </div>
+              {liveResult.unplacedPartIds.length > 0 && (
+                <UnplacedPartsCallout
+                  unplacedPartIds={liveResult.unplacedPartIds}
+                  parts={project.parts}
+                  algorithm={project.algorithm}
+                  unit={project.unit}
+                  canAddSheet={project.sheets.length > 0}
+                  onAddSheet={handleAddSheet}
+                  onSwitchAlgorithm={handleSwitchToMaxRects}
+                />
+              )}
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-neutral-200 bg-white p-4">
+                <p className="text-sm text-neutral-600">
+                  {liveResult.unplacedPartIds.length === 0
+                    ? 'All parts placed.'
+                    : `${liveResult.packedSheets.reduce((n, ps) => n + ps.placements.length, 0)} part${liveResult.packedSheets.reduce((n, ps) => n + ps.placements.length, 0) === 1 ? '' : 's'} placed across ${liveResult.totalSheets} sheet${liveResult.totalSheets === 1 ? '' : 's'}.`}
+                </p>
                 <PdfDownloadButton />
               </div>
 

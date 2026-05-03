@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Unplaced parts callout** with actionable next steps. When the
+  optimizer can't fit some parts, the result panel now lists each
+  unplaced part by label and dimensions and offers two one-click
+  actions: "Add a sheet & re-optimize" (bumps the dominant sheet's
+  quantity by 1 and re-runs) and "Try Max Efficiency mode" (switches
+  algorithm from guillotine to MaxRects and re-runs). Replaces the
+  prior dead-end red text. ([#6](https://github.com/paradosi/mycutlist-app/issues/6))
+
 ### Changed
 
 - Project name is now owned by the **Settings** tab — the duplicate
