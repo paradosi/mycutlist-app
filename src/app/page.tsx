@@ -68,6 +68,7 @@ type Tab = 'parts' | 'sheets' | 'materials' | 'settings'
 export default function Home() {
   useMaterialSelfHeal()
   const project = useProjectStore((s) => s.project)
+  const materials = useMaterialsStore((s) => s.materials)
   const setProjectName = useProjectStore((s) => s.setProjectName)
   const setUnit = useProjectStore((s) => s.setUnit)
   const setResults = useProjectStore((s) => s.setResults)
@@ -282,6 +283,7 @@ export default function Home() {
               {liveResult.packedSheets.map((ps, idx) => {
                 const sheet = project.sheets.find((s) => s.id === ps.sheetId)
                 if (!sheet) return null
+                const material = materials.find((m) => m.id === sheet.materialId)
                 return (
                   <SheetLayoutRenderer
                     key={idx}
@@ -291,6 +293,7 @@ export default function Home() {
                     unit={project.unit}
                     index={idx}
                     total={liveResult.totalSheets}
+                    materialName={material?.name}
                   />
                 )
               })}

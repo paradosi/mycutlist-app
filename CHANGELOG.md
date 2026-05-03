@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Result diagram polish.** Each placed sheet now shows a color legend
+  above the SVG (when there are 2+ distinct part labels), the material
+  name appears in the sheet header next to dimensions, and the SVG gets
+  proper accessibility metadata (`role="img"`, `aria-label`, `<title>`,
+  and a `<desc>` enumerating placements). The zoom and SVG-export
+  buttons now carry `title` and `aria-label` tooltips
+  ("Zoom out / Reset zoom to fit / Zoom in / Download this sheet as
+  SVG"). ([#7](https://github.com/paradosi/mycutlist-app/issues/7))
 - **Unplaced parts callout** with actionable next steps. When the
   optimizer can't fit some parts, the result panel now lists each
   unplaced part by label and dimensions and offers two one-click

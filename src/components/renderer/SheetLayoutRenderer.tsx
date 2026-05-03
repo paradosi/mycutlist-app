@@ -13,6 +13,7 @@ interface SheetLayoutRendererProps {
   unit: Unit
   index: number
   total: number
+  materialName?: string
 }
 
 export function SheetLayoutRenderer({
@@ -22,6 +23,7 @@ export function SheetLayoutRenderer({
   unit,
   index,
   total,
+  materialName,
 }: SheetLayoutRendererProps) {
   const [zoom, setZoom] = React.useState(1)
   const svgRef = React.useRef<SVGSVGElement>(null)
@@ -62,9 +64,22 @@ export function SheetLayoutRenderer({
   const displayWidth = baseDisplayWidth * zoom
   const displayHeight = sheet.heightMm * scale * zoom
 
+  const seenLabels = new Set<string>()
+  const legend: { label: string; color: string }[] = []
+  for (const pl of packed.placements) {
+    const part = parts.find((p) => p.id === pl.partId)
+    if (!part) continue
+    const key = part.label || 'Unnamed'
+    if (seenLabels.has(key)) continue
+    seenLabels.add(key)
+    legend.push({ label: key, color: colorForLabel(part.label) })
+  }
+
+  const ariaLabel = `Sheet ${index + 1} of ${total}: ${packed.placements.length} part${packed.placements.length === 1 ? '' : 's'} placed at ${utilizationPct}% utilization, ${remainingLabel} remaining`
+
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-4">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="text-sm font-semibold">
             Sheet {index + 1} of {total} — {utilizationPct}% utilized ·{' '}
@@ -73,6 +88,7 @@ export function SheetLayoutRenderer({
           <p className="text-xs text-neutral-500">
             {formatFromMm(sheet.widthMm, unit)} ×{' '}
             {formatFromMm(sheet.heightMm, unit)} {unit}
+            {materialName ? ` · ${materialName}` : ''}
           </p>
         </div>
         <div className="flex items-center gap-1">
@@ -80,24 +96,55 @@ export function SheetLayoutRenderer({
             size="sm"
             variant="outline"
             onClick={() => setZoom((z) => Math.max(0.25, z - 0.25))}
+            title="Zoom out"
+            aria-label="Zoom out"
           >
             −
           </Button>
-          <Button size="sm" variant="outline" onClick={() => setZoom(1)}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setZoom(1)}
+            title="Reset zoom to fit"
+            aria-label="Reset zoom to fit"
+          >
             Fit
           </Button>
           <Button
             size="sm"
             variant="outline"
             onClick={() => setZoom((z) => Math.min(4, z + 0.25))}
+            title="Zoom in"
+            aria-label="Zoom in"
           >
             +
           </Button>
-          <Button size="sm" variant="outline" onClick={handleExportSvg}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleExportSvg}
+            title="Download this sheet as SVG"
+            aria-label="Download this sheet as SVG"
+          >
             SVG
           </Button>
         </div>
       </div>
+
+      {legend.length > 1 && (
+        <ul className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-600">
+          {legend.map(({ label, color }) => (
+            <li key={label} className="flex items-center gap-1.5">
+              <span
+                aria-hidden
+                className="inline-block h-3 w-3 rounded-sm border border-neutral-400"
+                style={{ backgroundColor: color }}
+              />
+              {label}
+            </li>
+          ))}
+        </ul>
+      )}
 
       <div ref={containerRef} className="overflow-auto" style={{ maxHeight: 600 }}>
         <svg
@@ -107,7 +154,23 @@ export function SheetLayoutRenderer({
           height={displayHeight + padding * 2}
           viewBox={`0 0 ${sheet.widthMm + padding * 2} ${sheet.heightMm + padding * 2}`}
           style={{ display: 'block' }}
+          role="img"
+          aria-label={ariaLabel}
         >
+          <title>{ariaLabel}</title>
+          <desc>
+            {`Sheet ${index + 1} (${formatFromMm(sheet.widthMm, unit)} × ${formatFromMm(sheet.heightMm, unit)} ${unit}${materialName ? `, ${materialName}` : ''}). ` +
+              packed.placements
+                .map((pl) => {
+                  const part = parts.find((p) => p.id === pl.partId)
+                  if (!part) return ''
+                  const w = pl.rotated ? part.heightMm : part.widthMm
+                  const h = pl.rotated ? part.widthMm : part.heightMm
+                  return `${part.label || 'Unnamed'}: ${formatFromMm(w, unit)} × ${formatFromMm(h, unit)}.`
+                })
+                .filter(Boolean)
+                .join(' ')}
+          </desc>
           <g transform={`translate(${padding} ${padding})`}>
             {/* sheet background */}
             <rect
