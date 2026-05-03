@@ -107,18 +107,18 @@ export default function Home() {
   return (
     <div className="flex min-h-screen flex-col bg-neutral-50 text-neutral-900">
       <header className="border-b border-neutral-200 bg-white">
-        <div className="mx-auto flex max-w-[1800px] items-center justify-between px-6 py-3">
-          <div className="flex items-center gap-3">
+        <div className="mx-auto flex max-w-[1800px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
+          <div className="mr-auto flex items-center gap-3">
             <h1 className="text-base font-semibold">MyCutList</h1>
             <span className="hidden text-xs text-neutral-500 md:inline">
               Phase 1 preview
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Input
               value={project.name}
               onChange={(e) => setProjectName(e.target.value)}
-              className="w-56"
+              className="w-40 sm:w-56"
             />
             <Select
               value={project.unit}
@@ -133,7 +133,7 @@ export default function Home() {
               href="https://github.com/paradosi/mycutlist-app/issues/new?labels=feedback&template=feedback.md"
               target="_blank"
               rel="noopener noreferrer"
-              className="ml-2 inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-900 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-100"
+              className="ml-1 inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-900 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-100 sm:ml-2"
             >
               <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
               Feedback
@@ -142,11 +142,11 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-[1800px] flex-1 flex-col gap-6 px-6 py-6">
+      <main className="mx-auto flex w-full max-w-[1800px] flex-1 flex-col gap-6 px-4 py-4 sm:px-6 sm:py-6">
         {/* Top: data entry */}
         <section className="space-y-4">
           <div className="grid gap-4 lg:grid-cols-3">
-            <div className="rounded-lg border border-neutral-200 bg-white lg:col-span-2">
+            <div className="min-w-0 rounded-lg border border-neutral-200 bg-white lg:col-span-2">
               <div className="flex border-b border-neutral-200">
                 <TabButton active={tab === 'parts'} onClick={() => setTab('parts')}>
                   Parts
@@ -197,7 +197,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="rounded-lg border border-neutral-200 bg-white p-4">
+            <div className="min-w-0 rounded-lg border border-neutral-200 bg-white p-4">
               <OptimizerControls
                 isRunning={isRunning}
                 canOptimize={canOptimize}
