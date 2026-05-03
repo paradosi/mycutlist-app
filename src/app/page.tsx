@@ -115,15 +115,11 @@ export default function Home() {
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Input
-              value={project.name}
-              onChange={(e) => setProjectName(e.target.value)}
-              className="w-40 sm:w-56"
-            />
             <Select
               value={project.unit}
               onChange={(e) => setUnit(e.target.value as Unit)}
               className="w-20"
+              aria-label="Unit"
             >
               <option value="in">in</option>
               <option value="mm">mm</option>

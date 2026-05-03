@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Project name is now owned by the **Settings** tab — the duplicate
+  Project Name input has been removed from the header. The Unit dropdown
+  stays in the header as a quick-toggle convenience and writes to the
+  same store atom as Settings → Unit. ([#4](https://github.com/paradosi/mycutlist-app/issues/4))
+
 ### Fixed
 
 - Result panel no longer shows "All parts placed." with a Download PDF
@@ -14,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   until a result has actual placed or unplaced parts. The Optimize button
   is also disabled with an inline reason when there are no parts or no
   sheets to work with. ([#5](https://github.com/paradosi/mycutlist-app/issues/5))
+- Mobile layout no longer overflows horizontally below ~900px. Header
+  wraps cleanly, Project Name input shrinks below sm, and the grid items
+  use `min-w-0` so the tab card and optimizer card collapse to viewport
+  width on narrow screens (verified at 390 / 768 / 1600). ([#3](https://github.com/paradosi/mycutlist-app/issues/3))
 
 ### Added
 
