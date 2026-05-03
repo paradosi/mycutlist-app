@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Result panel no longer shows "All parts placed." with a Download PDF
+  button before any optimization has run. The empty state is preserved
+  until a result has actual placed or unplaced parts. The Optimize button
+  is also disabled with an inline reason when there are no parts or no
+  sheets to work with. ([#5](https://github.com/paradosi/mycutlist-app/issues/5))
+
 ### Added
 
 - **Live deployment** — public preview at [mycutlist.app](https://mycutlist.app)
