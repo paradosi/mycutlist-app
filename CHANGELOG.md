@@ -19,18 +19,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   SVG"). ([#7](https://github.com/paradosi/mycutlist-app/issues/7))
 - **Unplaced parts callout** with actionable next steps. When the
   optimizer can't fit some parts, the result panel now lists each
-  unplaced part by label and dimensions and offers two one-click
-  actions: "Add a sheet & re-optimize" (bumps the dominant sheet's
-  quantity by 1 and re-runs) and "Try Max Efficiency mode" (switches
-  algorithm from guillotine to MaxRects and re-runs). Replaces the
-  prior dead-end red text. ([#6](https://github.com/paradosi/mycutlist-app/issues/6))
+  unplaced part by label and dimensions and offers a one-click
+  "Add a sheet & re-optimize" (bumps the dominant sheet's quantity by 1
+  and re-runs). Replaces the prior dead-end red text.
+  ([#6](https://github.com/paradosi/mycutlist-app/issues/6))
+- **Sheet elimination pass** in the optimizer. After the main pass, the
+  packer takes sheets in ascending utilization and tries to move every
+  part on one into the free space of the other sheets of the same
+  material, dropping that sheet when they all fit. It repeats until no
+  sheet can be dropped. On 20,000 random inputs it never used more
+  sheets than before and saved at least one sheet in 3.7% of
+  single-sheet-type projects and 26% of mixed-sheet-type ones.
+- **Rip Cuts First** now does something. With that cut preference the
+  packer always splits free space along the sheet's long axis, so
+  layouts become full-length rips crosscut into parts. Previously the
+  setting was saved but never read, and both preferences produced the
+  same layout.
 
 ### Changed
 
+- **CNC / Jigsaw (Max Efficiency)** is disabled and labeled "coming
+  soon". No MaxRects packer exists yet: choosing it, or the unplaced
+  parts callout's "Try Max Efficiency mode" button, re-ran the same
+  guillotine layout. The button is removed. Projects saved with
+  `algorithm: 'maxrects'` are reset to guillotine on load (store
+  version 1).
 - Project name is now owned by the **Settings** tab — the duplicate
   Project Name input has been removed from the header. The Unit dropdown
   stays in the header as a quick-toggle convenience and writes to the
   same store atom as Settings → Unit. ([#4](https://github.com/paradosi/mycutlist-app/issues/4))
+
+### Removed
+
+- The optimizer's **retry pass** (listed under 0.1.0). It could never
+  place a part: free rects only shrink while a sheet is packed, and every
+  unplaced part had already been tried against every sheet of its
+  material, so the retry pass could only repeat a check that had already
+  failed. A 20,000-input fuzz comparison produced byte-identical
+  results with and without it. Replaced by the sheet elimination pass
+  above.
 
 ### Fixed
 
