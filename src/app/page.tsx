@@ -74,7 +74,6 @@ export default function Home() {
   const setResults = useProjectStore((s) => s.setResults)
   const clearResults = useProjectStore((s) => s.clearResults)
   const updateSheet = useProjectStore((s) => s.updateSheet)
-  const setAlgorithm = useProjectStore((s) => s.setAlgorithm)
 
   const { optimize, cancel, isRunning, progress, result, error } = useOptimizer()
   const [tab, setTab] = React.useState<Tab>('parts')
@@ -113,11 +112,6 @@ export default function Home() {
     updateSheet(dominant.id, { quantity: dominant.quantity + 1 })
     void runOptimize()
   }, [updateSheet, runOptimize])
-
-  const handleSwitchToMaxRects = React.useCallback(() => {
-    setAlgorithm('maxrects')
-    void runOptimize()
-  }, [setAlgorithm, runOptimize])
 
   const liveResult = result ?? project.results
   const hasResult =
@@ -264,11 +258,9 @@ export default function Home() {
                 <UnplacedPartsCallout
                   unplacedPartIds={liveResult.unplacedPartIds}
                   parts={project.parts}
-                  algorithm={project.algorithm}
                   unit={project.unit}
                   canAddSheet={project.sheets.length > 0}
                   onAddSheet={handleAddSheet}
-                  onSwitchAlgorithm={handleSwitchToMaxRects}
                 />
               )}
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-neutral-200 bg-white p-4">
