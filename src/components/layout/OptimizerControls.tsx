@@ -128,9 +128,9 @@ export function OptimizerControls({
               </li>
               <li>
                 <span className="font-semibold">CNC / Jigsaw (Max Efficiency)</span>
-                {' '}— allows partial cuts, so parts can be packed tighter.
-                Only choose this if you&apos;re using a CNC, jigsaw, or
-                bandsaw that can stop mid-sheet.
+                {' '}— <em>coming soon.</em> Will allow partial cuts, so parts
+                can be packed tighter, for a CNC, jigsaw, or bandsaw that can
+                stop mid-sheet.
               </li>
             </ul>
           </HelpTip>
@@ -141,7 +141,9 @@ export function OptimizerControls({
           onChange={(e) => setAlgorithm(e.target.value as Algorithm)}
         >
           <option value="guillotine">Table/Track Saw (Guillotine)</option>
-          <option value="maxrects">CNC / Jigsaw (Max Efficiency)</option>
+          <option value="maxrects" disabled>
+            CNC / Jigsaw (Max Efficiency) — coming soon
+          </option>
         </Select>
       </div>
 

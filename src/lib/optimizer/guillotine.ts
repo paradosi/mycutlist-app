@@ -1,13 +1,16 @@
 // Guillotine bin packing — Jylänki 2010 "A Thousand Ways to Pack the Bin",
 // section 3 (Guillotine algorithm). Heuristics:
 //   - Rectangle choice: BSSF (Best Short Side Fit) — Jylänki §3.2
-//   - Split rule:       MAXAS (Maximize Larger Area Split) — Jylänki §3.3
+//   - Split rule:       MAXAS (Maximize Larger Area Split) — Jylänki §3.3,
+//                       or a fixed long-axis split for cutStrategy 'rip-first'
+//   - Post-pass:        sheet elimination (see eliminateSheets)
 //
 // All inputs and outputs are in millimeters. The function is pure: no side
 // effects, no I/O, deterministic given equivalent inputs and a stable sort.
 
 import type {
   Cut,
+  CutStrategy,
   Offcut,
   OptimizerInput,
   OptimizerResult,
@@ -129,10 +132,37 @@ function splitMaxAs(free: Rect, placed: Orientation, kerfMm: number): Rect[] {
   //                   left child  = placed.w × (h - placed - kerf)
   const horizArea = free.w * Math.max(0, remainingBottom)
   const vertArea = free.h * Math.max(0, remainingRight)
+  return splitAlong(free, placed, kerfMm, horizArea >= vertArea ? 'horizontal' : 'vertical')
+}
+
+// Fixed-axis split used by the 'rip-first' strategy. Not one of Jylänki's
+// §3.3 rules (those all choose the axis per placement): here the full-span
+// child always runs along the sheet's long axis, so the first cut on every
+// free rect is a rip. The layout degenerates into full-length strips that
+// are then crosscut into parts — the table-saw-with-a-fence workflow.
+function splitRipFirst(
+  free: Rect,
+  placed: Orientation,
+  kerfMm: number,
+  ripAlongX: boolean,
+): Rect[] {
+  return splitAlong(free, placed, kerfMm, ripAlongX ? 'horizontal' : 'vertical')
+}
+
+// Shared geometry for both split rules. 'horizontal' keeps a full-width
+// child below the placement; 'vertical' keeps a full-height child to its
+// right. Every child lies inside `free`.
+function splitAlong(
+  free: Rect,
+  placed: Orientation,
+  kerfMm: number,
+  axis: 'horizontal' | 'vertical',
+): Rect[] {
+  const remainingRight = free.w - placed.w - kerfMm
+  const remainingBottom = free.h - placed.h - kerfMm
 
   const out: Rect[] = []
-  if (horizArea >= vertArea) {
-    // Horizontal split keeps the bigger area as a full-width strip below.
+  if (axis === 'horizontal') {
     if (remainingBottom > 0) {
       out.push({
         x: free.x,
@@ -150,7 +180,6 @@ function splitMaxAs(free: Rect, placed: Orientation, kerfMm: number): Rect[] {
       })
     }
   } else {
-    // Vertical split keeps the bigger area as a full-height strip on the right.
     if (remainingRight > 0) {
       out.push({
         x: free.x + placed.w + kerfMm,
@@ -197,10 +226,62 @@ function contains(outer: Rect, inner: Rect): boolean {
   )
 }
 
-interface PackOutcome {
-  placements: Placement[]
-  placedRects: Array<Rect & { partId: string }>
-  remainingFree: Rect[]
+interface PlacedItem extends Rect {
+  part: ExpandedPart
+  rotated: boolean
+}
+
+// Per-sheet-copy working state. Kept mutable until the end so the
+// sheet-elimination pass can add parts to a sheet or drop it entirely
+// before PackedSheet records are built.
+interface SheetState {
+  sheet: Sheet
+  placed: PlacedItem[]
+  free: Rect[]
+}
+
+function newSheetState(sheet: Sheet): SheetState {
+  const innerW = Math.max(0, sheet.widthMm - 2 * sheet.trimMm)
+  const innerH = Math.max(0, sheet.heightMm - 2 * sheet.trimMm)
+  return {
+    sheet,
+    placed: [],
+    free: [{ x: sheet.trimMm, y: sheet.trimMm, w: innerW, h: innerH }],
+  }
+}
+
+function cloneState(s: SheetState): SheetState {
+  return { sheet: s.sheet, placed: s.placed.slice(), free: s.free.slice() }
+}
+
+// Place `part` into `state.free[choice.rectIndex]`, then split and prune the
+// free list (Jylänki §3.3 / §3.4).
+function placeInto(
+  state: SheetState,
+  part: ExpandedPart,
+  choice: Choice,
+  kerfMm: number,
+  strategy: CutStrategy,
+): void {
+  const target = state.free[choice.rectIndex]
+  const o = choice.orientation
+  state.placed.push({
+    part,
+    x: target.x,
+    y: target.y,
+    w: o.w,
+    h: o.h,
+    rotated: o.rotated,
+  })
+  const split =
+    strategy === 'rip-first'
+      ? splitRipFirst(target, o, kerfMm, state.sheet.widthMm >= state.sheet.heightMm)
+      : splitMaxAs(target, o, kerfMm)
+  state.free = pruneContained([
+    ...state.free.slice(0, choice.rectIndex),
+    ...state.free.slice(choice.rectIndex + 1),
+    ...split,
+  ])
 }
 
 function packOneCopy(
@@ -208,15 +289,9 @@ function packOneCopy(
   used: boolean[],
   sheet: Sheet,
   kerfMm: number,
-): PackOutcome {
-  const innerW = Math.max(0, sheet.widthMm - 2 * sheet.trimMm)
-  const innerH = Math.max(0, sheet.heightMm - 2 * sheet.trimMm)
-  let free: Rect[] = [
-    { x: sheet.trimMm, y: sheet.trimMm, w: innerW, h: innerH },
-  ]
-  const placements: Placement[] = []
-  const placedRects: Array<Rect & { partId: string }> = []
-
+  strategy: CutStrategy,
+): SheetState {
+  const state = newSheetState(sheet)
   for (let i = 0; i < parts.length; i++) {
     if (used[i]) continue
     const part = parts[i]
@@ -224,36 +299,81 @@ function packOneCopy(
     // material. This is a hard constraint for woodworking — you can't put a
     // 3/4" plywood part on a 1/2" plywood sheet.
     if (part.materialId !== sheet.materialId) continue
-    const choice = pickBestRect(part, free)
+    const choice = pickBestRect(part, state.free)
     if (!choice) continue
-
-    const target = free[choice.rectIndex]
-    const o = choice.orientation
-    placements.push({
-      partId: part.partId,
-      x: target.x,
-      y: target.y,
-      rotated: o.rotated,
-    })
-    placedRects.push({
-      partId: part.partId,
-      x: target.x,
-      y: target.y,
-      w: o.w,
-      h: o.h,
-    })
+    placeInto(state, part, choice, kerfMm, strategy)
     used[i] = true
-
-    const split = splitMaxAs(target, o, kerfMm)
-    free = [
-      ...free.slice(0, choice.rectIndex),
-      ...free.slice(choice.rectIndex + 1),
-      ...split,
-    ]
-    free = pruneContained(free)
   }
+  return state
+}
 
-  return { placements, placedRects, remainingFree: free }
+function utilizationOf(state: SheetState): number {
+  const sheetArea = state.sheet.widthMm * state.sheet.heightMm
+  if (sheetArea <= 0) return 0
+  return state.placed.reduce((s, r) => s + r.w * r.h, 0) / sheetArea
+}
+
+// Sheet-elimination pass. The greedy main pass fills sheet copies in order,
+// so a part only ever tries sheets up to the one it lands on. Free rects
+// only shrink as a sheet fills, which means an unplaced part can never fit
+// anywhere afterwards — but a *placed* part may fit on a sheet that was
+// opened after its own. So: take sheets in ascending utilization, try to
+// move every part on one into the free space of the other sheets of the
+// same material, and drop it if they all fit. Repeat until no sheet can be
+// dropped. Parts only go into existing guillotine free rects, so every
+// layout stays guillotine-cuttable.
+function eliminateSheets(
+  states: SheetState[],
+  kerfMm: number,
+  strategy: CutStrategy,
+): SheetState[] {
+  let current = states
+  let improved = true
+  while (improved) {
+    improved = false
+    const order = current
+      .map((s, i) => ({ i, u: utilizationOf(s) }))
+      .sort((a, b) => a.u - b.u)
+    for (const { i: victimIdx } of order) {
+      const victim = current[victimIdx]
+      const trial = new Map<number, SheetState>()
+      current.forEach((s, i) => {
+        if (i !== victimIdx && s.sheet.materialId === victim.sheet.materialId) {
+          trial.set(i, cloneState(s))
+        }
+      })
+      if (trial.size === 0) continue
+
+      // Jylänki §3.2: largest first, same ordering as the main pass.
+      const parts = victim.placed
+        .map((p) => p.part)
+        .sort((a, b) => b.widthMm * b.heightMm - a.widthMm * a.heightMm)
+
+      let allFit = true
+      for (const part of parts) {
+        let best: { host: SheetState; choice: Choice } | null = null
+        for (const host of trial.values()) {
+          const choice = pickBestRect(part, host.free)
+          if (choice && (!best || choice.score < best.choice.score)) {
+            best = { host, choice }
+          }
+        }
+        if (!best) {
+          allFit = false
+          break
+        }
+        placeInto(best.host, part, best.choice, kerfMm, strategy)
+      }
+      if (!allFit) continue
+
+      current = current
+        .map((s, i) => trial.get(i) ?? s)
+        .filter((_, i) => i !== victimIdx)
+      improved = true
+      break
+    }
+  }
+  return current
 }
 
 function buildCuts(
@@ -309,114 +429,56 @@ function buildOffcuts(remaining: Rect[]): Offcut[] {
     .map((r) => ({ x: r.x, y: r.y, widthMm: r.w, heightMm: r.h }))
 }
 
-// Mutable per-sheet state retained between the main pass and the retry pass.
-// Lets the retry pass place a small unplaced part into the leftover free
-// rects of a sheet that's already been packed, instead of opening a new
-// dedicated sheet for a handful of small pieces.
-interface SheetState {
-  packedIdx: number
-  sheet: Sheet
-  placedRects: Array<Rect & { partId: string }>
-  free: Rect[]
-}
-
 export function guillotinePack(input: OptimizerInput): OptimizerResult {
   const start = Date.now()
   const expanded = expandParts(input.parts)
   const used: boolean[] = expanded.map(() => false)
 
-  const packedSheets: PackedSheet[] = []
-  const sheetStates: SheetState[] = []
+  let states: SheetState[] = []
 
   for (const sheet of input.sheets) {
     const copies = Math.max(1, Math.floor(sheet.quantity))
     for (let copyIndex = 0; copyIndex < copies; copyIndex++) {
       if (used.every(Boolean)) break
-      const remaining = expanded
-        .map((p, i) => ({ ...p, _idx: i }))
-        .filter((p) => !used[p._idx])
-      if (remaining.length === 0) break
-
-      const outcome = packOneCopy(expanded, used, sheet, input.kerfMm)
-      if (outcome.placements.length === 0) continue
-
-      const sheetArea = sheet.widthMm * sheet.heightMm
-      const placedArea = outcome.placedRects.reduce(
-        (s, r) => s + r.w * r.h,
-        0,
-      )
-      const utilization = sheetArea > 0 ? placedArea / sheetArea : 0
-
-      const packedIdx = packedSheets.length
-      packedSheets.push({
-        sheetId: sheet.id,
-        copyIndex,
-        utilization,
-        placements: outcome.placements,
-        cuts: buildCuts(outcome.placedRects, input.kerfMm),
-        offcuts: buildOffcuts(outcome.remainingFree),
-      })
-      sheetStates.push({
-        packedIdx,
+      const state = packOneCopy(
+        expanded,
+        used,
         sheet,
-        placedRects: outcome.placedRects.slice(),
-        free: outcome.remainingFree.slice(),
-      })
+        input.kerfMm,
+        input.cutStrategy,
+      )
+      if (state.placed.length > 0) states.push(state)
     }
     if (used.every(Boolean)) break
   }
 
-  // Retry pass — for any part that wasn't placed during the main loop, try
-  // every existing packed sheet's remaining free space (largest free rect
-  // first) before declaring it unplaced. This prevents the pathological
-  // case where 6 small parts open a new dedicated sheet at 20% utilization
-  // when a previous sheet still had room for some of them.
-  for (let i = 0; i < expanded.length; i++) {
-    if (used[i]) continue
-    const part = expanded[i]
-    for (const state of sheetStates) {
-      if (part.materialId !== state.sheet.materialId) continue
-      const choice = pickBestRect(part, state.free)
-      if (!choice) continue
+  states = eliminateSheets(states, input.kerfMm, input.cutStrategy)
 
-      const target = state.free[choice.rectIndex]
-      const o = choice.orientation
-      const newPlacement: Placement = {
-        partId: part.partId,
-        x: target.x,
-        y: target.y,
-        rotated: o.rotated,
-      }
-      state.placedRects.push({
-        partId: part.partId,
-        x: target.x,
-        y: target.y,
-        w: o.w,
-        h: o.h,
-      })
-      used[i] = true
-
-      const split = splitMaxAs(target, o, input.kerfMm)
-      state.free = pruneContained([
-        ...state.free.slice(0, choice.rectIndex),
-        ...state.free.slice(choice.rectIndex + 1),
-        ...split,
-      ])
-
-      // Update the corresponding packedSheet entry in place.
-      const ps = packedSheets[state.packedIdx]
-      ps.placements = [...ps.placements, newPlacement]
-      const sheetArea = state.sheet.widthMm * state.sheet.heightMm
-      const placedArea = state.placedRects.reduce(
-        (s, r) => s + r.w * r.h,
-        0,
-      )
-      ps.utilization = sheetArea > 0 ? placedArea / sheetArea : 0
-      ps.cuts = buildCuts(state.placedRects, input.kerfMm)
-      ps.offcuts = buildOffcuts(state.free)
-      break
+  // Build output records. copyIndex is renumbered per sheet definition so a
+  // dropped copy doesn't leave a gap.
+  const copyCounter = new Map<string, number>()
+  const packedSheets: PackedSheet[] = states.map((state) => {
+    const copyIndex = copyCounter.get(state.sheet.id) ?? 0
+    copyCounter.set(state.sheet.id, copyIndex + 1)
+    return {
+      sheetId: state.sheet.id,
+      copyIndex,
+      utilization: utilizationOf(state),
+      placements: state.placed.map(
+        (p): Placement => ({
+          partId: p.part.partId,
+          x: p.x,
+          y: p.y,
+          rotated: p.rotated,
+        }),
+      ),
+      cuts: buildCuts(
+        state.placed.map((p) => ({ partId: p.part.partId, x: p.x, y: p.y, w: p.w, h: p.h })),
+        input.kerfMm,
+      ),
+      offcuts: buildOffcuts(state.free),
     }
-  }
+  })
 
   const unplacedPartIds: string[] = []
   for (let i = 0; i < expanded.length; i++) {
@@ -460,6 +522,7 @@ export const __test = {
   expandParts,
   pickBestRect,
   splitMaxAs,
+  splitRipFirst,
   pruneContained,
   contains,
 }

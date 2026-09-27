@@ -3,26 +3,22 @@
 import * as React from 'react'
 import { Button } from '@/components/ui/button'
 import { formatFromMm } from '@/lib/units'
-import type { Algorithm, Part, Unit } from '@/types'
+import type { Part, Unit } from '@/types'
 
 interface UnplacedPartsCalloutProps {
   unplacedPartIds: string[]
   parts: Part[]
-  algorithm: Algorithm
   unit: Unit
   canAddSheet: boolean
   onAddSheet: () => void
-  onSwitchAlgorithm: () => void
 }
 
 export function UnplacedPartsCallout({
   unplacedPartIds,
   parts,
-  algorithm,
   unit,
   canAddSheet,
   onAddSheet,
-  onSwitchAlgorithm,
 }: UnplacedPartsCalloutProps) {
   const total = unplacedPartIds.length
 
@@ -65,18 +61,13 @@ export function UnplacedPartsCallout({
         </ul>
       )}
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        {canAddSheet && (
+      {canAddSheet && (
+        <div className="mt-3 flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={onAddSheet}>
             Add a sheet &amp; re-optimize
           </Button>
-        )}
-        {algorithm === 'guillotine' && (
-          <Button size="sm" variant="outline" onClick={onSwitchAlgorithm}>
-            Try Max Efficiency mode
-          </Button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }

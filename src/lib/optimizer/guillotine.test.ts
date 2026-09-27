@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import fc from 'fast-check'
-import { guillotinePack } from './guillotine'
-import type { OptimizerInput, Part, Sheet, Material } from '@/types'
+import { guillotinePack, __test } from './guillotine'
+import type { CutStrategy, OptimizerInput, Part, Sheet, Material } from '@/types'
 
 const MATERIAL: Material = {
   id: 'mat-1',
@@ -10,13 +10,18 @@ const MATERIAL: Material = {
   hasGrain: true,
 }
 
-function buildInput(parts: Part[], sheets: Sheet[], kerfMm = 3.175): OptimizerInput {
+function buildInput(
+  parts: Part[],
+  sheets: Sheet[],
+  kerfMm = 3.175,
+  cutStrategy: CutStrategy = 'yield',
+): OptimizerInput {
   return {
     parts,
     sheets,
     materials: [MATERIAL],
     kerfMm,
-    cutStrategy: 'yield',
+    cutStrategy,
     algorithm: 'guillotine',
   }
 }
@@ -125,8 +130,8 @@ describe('guillotinePack — material isolation', () => {
   })
 })
 
-describe('guillotinePack — retry pass for late small parts', () => {
-  it('places small leftovers on an existing sheet rather than opening a new one when room exists', () => {
+describe('guillotinePack — filling a sheet before opening the next', () => {
+  it('places small parts in the leftover space of the current copy rather than opening a new one', () => {
     // One large 4×8 sheet, one big panel that fits with room left,
     // and 4 small pieces that should slot into the leftover area.
     const parts: Part[] = [
@@ -166,6 +171,91 @@ describe('guillotinePack — retry pass for late small parts', () => {
     // All parts must land on a single sheet copy: one big + four small.
     expect(result.packedSheets.length).toBe(1)
     expect(result.packedSheets[0].placements.length).toBe(5)
+  })
+})
+
+describe('guillotinePack — sheet elimination', () => {
+  function part(id: string, widthMm: number, heightMm: number): Part {
+    return {
+      id,
+      label: id,
+      materialId: MATERIAL.id,
+      widthMm,
+      heightMm,
+      quantity: 1,
+      grain: 'with',
+      rotationLocked: false,
+    }
+  }
+
+  it('drops a sheet whose parts all fit in the free space of a later sheet', () => {
+    // The greedy pass fills the small sheet first: the panel doesn't fit it,
+    // the strip does. The panel then opens the big sheet, which has room
+    // for the strip too. Without elimination this uses two sheets.
+    const sheets: Sheet[] = [
+      { id: 'small', materialId: MATERIAL.id, widthMm: 600, heightMm: 600, quantity: 1, trimMm: 0 },
+      { id: 'big', materialId: MATERIAL.id, widthMm: 2438.4, heightMm: 1219.2, quantity: 1, trimMm: 0 },
+    ]
+    const result = guillotinePack(
+      buildInput([part('panel', 2000, 1000), part('strip', 590, 100)], sheets),
+    )
+    expect(result.unplacedPartIds).toHaveLength(0)
+    expect(result.totalSheets).toBe(1)
+    expect(result.packedSheets[0].sheetId).toBe('big')
+    expect(result.packedSheets[0].copyIndex).toBe(0)
+    expect(result.packedSheets[0].placements.map((p) => p.partId).sort()).toEqual([
+      'panel',
+      'strip',
+    ])
+  })
+
+  it('never moves parts onto a sheet of a different material', () => {
+    const other: Sheet = {
+      id: 'big-other',
+      materialId: 'mat-other',
+      widthMm: 2438.4,
+      heightMm: 1219.2,
+      quantity: 1,
+      trimMm: 0,
+    }
+    const sheets: Sheet[] = [
+      { id: 'small', materialId: MATERIAL.id, widthMm: 600, heightMm: 600, quantity: 1, trimMm: 0 },
+      other,
+    ]
+    const panel: Part = { ...part('panel', 2000, 1000), materialId: 'mat-other' }
+    const result = guillotinePack(buildInput([panel, part('strip', 590, 100)], sheets))
+    expect(result.totalSheets).toBe(2)
+  })
+})
+
+describe('guillotinePack — cut strategy', () => {
+  // A 1000×1000 part leaves a 1440-wide strip to its right and a 220-high
+  // strip below. MAXAS keeps the larger area full-height on the right;
+  // rip-first always keeps a full-length rip below instead.
+  const parts: Part[] = [
+    { id: 'A', label: 'A', materialId: MATERIAL.id, widthMm: 1000, heightMm: 1000, quantity: 1, grain: 'with', rotationLocked: false },
+    { id: 'B', label: 'B', materialId: MATERIAL.id, widthMm: 1400, heightMm: 210, quantity: 1, grain: 'with', rotationLocked: false },
+  ]
+  const sheets: Sheet[] = [
+    { id: 's', materialId: MATERIAL.id, widthMm: 2440, heightMm: 1220, quantity: 1, trimMm: 0 },
+  ]
+
+  it("'yield' uses MAXAS: B goes into the full-height strip beside A", () => {
+    const [, b] = guillotinePack(buildInput(parts, sheets, 0, 'yield')).packedSheets[0].placements
+    expect({ x: b.x, y: b.y }).toEqual({ x: 1000, y: 0 })
+  })
+
+  it("'rip-first' keeps a full-length rip: B goes into the strip below A", () => {
+    const [, b] = guillotinePack(buildInput(parts, sheets, 0, 'rip-first')).packedSheets[0].placements
+    expect({ x: b.x, y: b.y }).toEqual({ x: 0, y: 1000 })
+  })
+
+  it("'rip-first' rips along the long axis of a portrait sheet", () => {
+    const { splitRipFirst } = __test
+    const free = { x: 0, y: 0, w: 1220, h: 2440 }
+    const [first] = splitRipFirst(free, { w: 1000, h: 1000, rotated: false }, 0, false)
+    // Full-height child to the right: the rip runs along y.
+    expect(first).toEqual({ x: 1000, y: 0, w: 220, h: 2440 })
   })
 })
 
@@ -318,11 +408,16 @@ describe('guillotinePack — property-based invariants', () => {
       ]
       return { parts, sheets, kerfMm: 3.175 }
     })
+    .chain((base) =>
+      fc
+        .constantFrom<CutStrategy>('yield', 'rip-first')
+        .map((cutStrategy) => ({ ...base, cutStrategy })),
+    )
 
   it('every placed part fits within the trimmed sheet bounds', () => {
     fc.assert(
-      fc.property(inputArb, ({ parts, sheets, kerfMm }) => {
-        const result = guillotinePack(buildInput(parts, sheets, kerfMm))
+      fc.property(inputArb, ({ parts, sheets, kerfMm, cutStrategy }) => {
+        const result = guillotinePack(buildInput(parts, sheets, kerfMm, cutStrategy))
         const sheet = sheets[0]
         const minX = sheet.trimMm
         const minY = sheet.trimMm
@@ -346,8 +441,8 @@ describe('guillotinePack — property-based invariants', () => {
 
   it('no two placements overlap on the same packed sheet (kerf gap respected)', () => {
     fc.assert(
-      fc.property(inputArb, ({ parts, sheets, kerfMm }) => {
-        const result = guillotinePack(buildInput(parts, sheets, kerfMm))
+      fc.property(inputArb, ({ parts, sheets, kerfMm, cutStrategy }) => {
+        const result = guillotinePack(buildInput(parts, sheets, kerfMm, cutStrategy))
         for (const ps of result.packedSheets) {
           const rects = ps.placements.map((pl) => {
             const part = parts.find((p) => p.id === pl.partId)!
@@ -379,8 +474,8 @@ describe('guillotinePack — property-based invariants', () => {
 
   it('grain=with parts are never rotated; grain=across parts are always rotated', () => {
     fc.assert(
-      fc.property(inputArb, ({ parts, sheets, kerfMm }) => {
-        const result = guillotinePack(buildInput(parts, sheets, kerfMm))
+      fc.property(inputArb, ({ parts, sheets, kerfMm, cutStrategy }) => {
+        const result = guillotinePack(buildInput(parts, sheets, kerfMm, cutStrategy))
         for (const ps of result.packedSheets) {
           for (const pl of ps.placements) {
             const part = parts.find((p) => p.id === pl.partId)!
@@ -395,14 +490,72 @@ describe('guillotinePack — property-based invariants', () => {
 
   it('utilization is between 0 and 1 inclusive', () => {
     fc.assert(
-      fc.property(inputArb, ({ parts, sheets, kerfMm }) => {
-        const result = guillotinePack(buildInput(parts, sheets, kerfMm))
+      fc.property(inputArb, ({ parts, sheets, kerfMm, cutStrategy }) => {
+        const result = guillotinePack(buildInput(parts, sheets, kerfMm, cutStrategy))
         for (const ps of result.packedSheets) {
           expect(ps.utilization).toBeGreaterThanOrEqual(0)
           expect(ps.utilization).toBeLessThanOrEqual(1 + 1e-6)
         }
       }),
       { numRuns: 30 },
+    )
+  })
+})
+
+describe('guillotinePack — accounting', () => {
+  it('every part instance is either placed exactly once or reported unplaced', () => {
+    fc.assert(
+      fc.property(
+        fc.array(
+          fc.record({
+            widthMm: fc.integer({ min: 50, max: 2600 }),
+            heightMm: fc.integer({ min: 50, max: 1300 }),
+            quantity: fc.integer({ min: 1, max: 4 }),
+          }),
+          { minLength: 1, maxLength: 10 },
+        ),
+        fc.array(
+          fc.record({
+            widthMm: fc.integer({ min: 300, max: 2500 }),
+            heightMm: fc.integer({ min: 300, max: 1300 }),
+            quantity: fc.integer({ min: 1, max: 3 }),
+          }),
+          { minLength: 1, maxLength: 3 },
+        ),
+        fc.constantFrom<CutStrategy>('yield', 'rip-first'),
+        (rawParts, rawSheets, cutStrategy) => {
+          const parts: Part[] = rawParts.map((p, i) => ({
+            ...p,
+            id: `p${i}`,
+            label: `P${i}`,
+            materialId: MATERIAL.id,
+            grain: 'none',
+            rotationLocked: false,
+          }))
+          const sheets: Sheet[] = rawSheets.map((sh, i) => ({
+            ...sh,
+            id: `s${i}`,
+            materialId: MATERIAL.id,
+            trimMm: 0,
+          }))
+          const result = guillotinePack(buildInput(parts, sheets, 3.175, cutStrategy))
+          for (const p of parts) {
+            const placed = result.packedSheets
+              .flatMap((ps) => ps.placements)
+              .filter((pl) => pl.partId === p.id).length
+            const unplaced = result.unplacedPartIds.filter((id) => id === p.id).length
+            expect(placed + unplaced).toBe(p.quantity)
+          }
+          // copyIndex stays contiguous per sheet definition after elimination.
+          for (const sh of sheets) {
+            const idx = result.packedSheets
+              .filter((ps) => ps.sheetId === sh.id)
+              .map((ps) => ps.copyIndex)
+            expect(idx).toEqual(idx.map((_, i) => i))
+          }
+        },
+      ),
+      { numRuns: 200 },
     )
   })
 })

@@ -180,6 +180,17 @@ export const useProjectStore = create<ProjectStore>()(
             removeItem: async () => {},
           }) as PersistStorage<ProjectStore>,
       partialize: (s) => ({ project: s.project, isDirty: s.isDirty }) as ProjectStore,
+      // v1: 'maxrects' was selectable (and reachable from the unplaced-parts
+      // callout) before any MaxRects packer existed. It is now disabled in
+      // the UI, so reset projects saved with it back to guillotine.
+      version: 1,
+      migrate: (persisted, version) => {
+        const state = persisted as Pick<ProjectStore, 'project' | 'isDirty'>
+        if (version < 1 && state?.project && state.project.algorithm !== 'guillotine') {
+          state.project.algorithm = 'guillotine'
+        }
+        return state as ProjectStore
+      },
     },
   ),
 )

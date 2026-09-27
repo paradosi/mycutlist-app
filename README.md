@@ -26,8 +26,10 @@ saws — with a UI that explains every domain term inline.
 - **Materials library** persisted across projects — define your own stock types
   with thickness, grain, and optional cost per sheet
 - **Guillotine optimizer** (Jylänki 2010 BSSF + MAXAS) running in a Web Worker
-  via comlink, with a retry pass that places small leftovers into earlier
-  sheets' free space rather than opening a new sheet
+  via comlink, with a sheet-elimination pass that empties a poorly used sheet
+  into the free space of the others when everything fits
+- **Cut preference** — *Best Yield* (MAXAS split) or *Rip Cuts First*
+  (full-length rips along the sheet's long axis, then crosscuts)
 - **Material isolation** — `3/4" plywood` parts only land on `3/4" plywood`
   sheets; the optimizer respects the material on every part and sheet
 - **SVG renderer** with zoom/fit, per-sheet SVG export, kerf gap visualization
@@ -95,14 +97,27 @@ The packer is a Guillotine bin packing implementation with:
 
 - **Pre-sort** parts by descending area before placement (Jylänki §3.2)
 - **BSSF** (Best Short Side Fit) rectangle choice
-- **MAXAS** (Maximize Larger Area Split) split rule
+- **MAXAS** (Maximize Larger Area Split) split rule for *Best Yield*. *Rip Cuts
+  First* uses a fixed split instead: the full-span leftover always runs along
+  the sheet's long axis, so the layout is strips ripped full-length and then
+  crosscut
 - **Pruning** of contained free rects after each split
 - **Material isolation** — parts only place on sheets of matching material
 - **Grain enforcement** — `with` parts never rotate, `across` always rotate,
   `either`/`none` try both
-- **Retry pass** — after the main loop, every still-unplaced part gets one more
-  attempt against every existing packed sheet's leftover free rects, with an
-  in-place update of placements / cuts / offcuts / utilization
+- **Sheet elimination** — the main pass fills sheet copies greedily in order,
+  so a part never sees sheets opened after the one it lands on. Afterwards,
+  sheets are taken in ascending utilization and the packer tries to move all
+  of one sheet's parts into the free space of the other sheets of the same material;
+  if every part fits, the sheet is dropped. It repeats until nothing changes.
+  Parts only go into existing guillotine free rects, so layouts stay
+  cuttable
+
+> [!NOTE]
+> There is deliberately no "retry unplaced parts" pass. Free rects only shrink
+> as a sheet fills, and an unplaced part has already been tried against every
+> sheet of its material, so a retry cannot succeed. 0.1.0 shipped one; it was
+> removed after a fuzz comparison showed it never changed a result.
 
 The whole optimizer runs in a Web Worker so the main thread stays responsive
 during a calculation.
@@ -111,7 +126,8 @@ during a calculation.
 
 **Phase 2 (planned):**
 
-- MaxRects algorithm (selectable via the existing dropdown)
+- MaxRects algorithm for CNC / jigsaw cutting. The *Max Efficiency* option is
+  in the Cut type dropdown but disabled ("coming soon") until this exists
 - Genetic-algorithm wrapper around guillotine for higher yield with rip-cut
   preference
 - Konva drag-to-edit after optimize
