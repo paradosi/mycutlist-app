@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Clear button** in the header. It offers **Clear parts** (removes every
+  part and the results, keeps sheets and settings) or **Start over** (resets
+  the project to a blank one; the saved materials library is untouched).
+  Both ask "Are you sure?" first, and an Undo bar stays up for 8 seconds
+  afterwards (paused while hovered) to restore the project exactly as it was.
+
 - **Result diagram polish.** Each placed sheet now shows a color legend
   above the SVG (when there are 2+ distinct part labels), the material
   name appears in the sheet header next to dimensions, and the SVG gets
@@ -50,6 +56,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   same store atom as Settings → Unit. ([#4](https://github.com/paradosi/mycutlist-app/issues/4))
 
 ### Removed
+
+- **Feedback button** in the header, for now. The GitHub repository was
+  made private on 2026-09-26, so the issue form it opened is no longer
+  reachable by visitors.
 
 - The optimizer's **retry pass** (listed under 0.1.0). It could never
   place a part: free rects only shrink while a sheet is packed, and every

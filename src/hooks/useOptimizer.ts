@@ -20,6 +20,8 @@ type WorkerOptimizer = {
 interface UseOptimizerReturn {
   optimize: (input: OptimizerInput) => Promise<OptimizerResult | null>
   cancel: () => void
+  /** Forget the last result, progress and error (e.g. after clearing). */
+  reset: () => void
   isRunning: boolean
   progress: OptimizerProgress | null
   result: OptimizerResult | null
@@ -89,5 +91,13 @@ export function useOptimizer(): UseOptimizerReturn {
     setIsRunning(false)
   }, [])
 
-  return { optimize, cancel, isRunning, progress, result, error }
+  const reset = React.useCallback(() => {
+    void remoteRef.current?.cancel()
+    setIsRunning(false)
+    setProgress(null)
+    setResult(null)
+    setError(null)
+  }, [])
+
+  return { optimize, cancel, reset, isRunning, progress, result, error }
 }
