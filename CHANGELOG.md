@@ -57,6 +57,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- **Feedback button** in the header, for now. The GitHub repository was
+  made private on 2026-09-26, so the issue form it opened is no longer
+  reachable by visitors.
+
 - The optimizer's **retry pass** (listed under 0.1.0). It could never
   place a part: free rects only shrink while a sheet is packed, and every
   unplaced part had already been tried against every sheet of its

@@ -191,15 +191,6 @@ export default function Home() {
               <option value="mm">mm</option>
             </Select>
             <UnitHelp />
-            <a
-              href="https://github.com/paradosi/mycutlist-app/issues/new?labels=feedback&template=feedback.md"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="ml-1 inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-900 shadow-sm transition-colors hover:border-amber-400 hover:bg-amber-100 sm:ml-2"
-            >
-              <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
-              Feedback
-            </a>
           </div>
         </div>
       </header>
