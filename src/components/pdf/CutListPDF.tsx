@@ -9,7 +9,7 @@ import {
   View,
 } from '@react-pdf/renderer'
 import { formatAreaFromMm2, formatFromMm } from '@/lib/units'
-import type { Material, PackedSheet, Part, Project, Sheet, Unit } from '@/types'
+import type { Cut, Material, PackedSheet, Part, Project, Sheet, Unit } from '@/types'
 import { SheetSvgPdf } from './SheetSvgPdf'
 
 const PAGE_PADDING = 36
@@ -287,7 +287,8 @@ function SheetPage({ packed, index, total, project, materials }: SheetPageProps)
 
   return (
     <Page size="LETTER" orientation={orientation} style={styles.page}>
-      <View style={{ height: headerH }}>
+      {/* fixed: repeats on continuation pages when the cut sequence wraps */}
+      <View style={{ height: headerH }} fixed>
         <Text style={styles.sheetHeader}>
           Sheet {index + 1} of {total} — {materialName} — {utilizationPct}%
           utilized · {remainingLabel} remaining
@@ -318,8 +319,65 @@ function SheetPage({ packed, index, total, project, materials }: SheetPageProps)
         <Text style={styles.h2}>Cut list for this sheet</Text>
         <CutListTable rows={grouped} unit={project.unit} />
       </View>
+
+      {packed.cuts.length > 0 && (
+        <View style={styles.table}>
+          {/* keep the heading with at least the first few rows */}
+          <Text style={styles.h2} minPresenceAhead={90}>
+            Cut sequence
+          </Text>
+          <Text style={styles.sheetMeta}>
+            Make the cuts in this order; the numbers match the drawing. Every
+            cut runs edge to edge across the piece it divides. Fence = distance
+            from that piece&apos;s reference edge (the one already jointed or
+            cut) to the line; the blade goes on the waste side of the line.
+          </Text>
+          <CutSequenceTable cuts={packed.cuts} unit={project.unit} />
+        </View>
+      )}
       <Footer />
     </Page>
+  )
+}
+
+const seqCol = {
+  step: { width: 40, fontSize: 9 },
+  dir: { width: 70, fontSize: 9 },
+  fence: { width: 90, fontSize: 9 },
+  note: { flex: 1, fontSize: 9 },
+} as const
+
+function cutNote(c: Cut): string {
+  if (c.kind === 'part') return ''
+  if (c.fenceMm === null) {
+    return c.direction === 'rip'
+      ? 'Joint reference long edge'
+      : 'Joint reference short edge'
+  }
+  return c.direction === 'rip' ? 'Trim far long edge' : 'Trim far short edge'
+}
+
+function CutSequenceTable({ cuts, unit }: { cuts: Cut[]; unit: Unit }) {
+  const bold = { fontFamily: 'Helvetica-Bold' }
+  return (
+    <View>
+      <View style={styles.rowHead} wrap={false}>
+        <Text style={[seqCol.step, bold]}>Step</Text>
+        <Text style={[seqCol.dir, bold]}>Cut</Text>
+        <Text style={[seqCol.fence, bold]}>Fence ({unit})</Text>
+        <Text style={[seqCol.note, bold]}>Note</Text>
+      </View>
+      {cuts.map((c) => (
+        <View key={c.index} style={styles.row} wrap={false}>
+          <Text style={[seqCol.step, bold]}>{c.label}</Text>
+          <Text style={seqCol.dir}>{c.direction === 'rip' ? 'Rip' : 'Crosscut'}</Text>
+          <Text style={seqCol.fence}>
+            {c.fenceMm === null ? '—' : formatFromMm(c.fenceMm, unit)}
+          </Text>
+          <Text style={seqCol.note}>{cutNote(c)}</Text>
+        </View>
+      ))}
+    </View>
   )
 }
 

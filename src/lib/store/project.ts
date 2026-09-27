@@ -183,11 +183,17 @@ export const useProjectStore = create<ProjectStore>()(
       // v1: 'maxrects' was selectable (and reachable from the unplaced-parts
       // callout) before any MaxRects packer existed. It is now disabled in
       // the UI, so reset projects saved with it back to guillotine.
-      version: 1,
+      // v2: Cut gained kind/label/fenceMm and became a real saw sequence.
+      // Results saved before that have none of these, so drop them; the
+      // project re-optimizes from its parts and sheets.
+      version: 2,
       migrate: (persisted, version) => {
         const state = persisted as Pick<ProjectStore, 'project' | 'isDirty'>
         if (version < 1 && state?.project && state.project.algorithm !== 'guillotine') {
           state.project.algorithm = 'guillotine'
+        }
+        if (version < 2 && state?.project) {
+          state.project.results = undefined
         }
         return state as ProjectStore
       },

@@ -37,6 +37,7 @@ const TEXT_PADDING_PT = 4 // horizontal padding inside a part rect (PDF pts)
 const MIN_FONT_PT = 5
 const DESIRED_LABEL_PT = 11
 const DESIRED_DIM_PT = 8
+const CUT_LABEL_PT = 6
 
 interface FitResult {
   text: string
@@ -209,6 +210,27 @@ export function SheetSvgPdf({
           strokeWidth={strokeKerf}
         />
       ))}
+
+      {/* cut step labels (T1, 1, 2, ...) at each cut's midpoint, matching the
+          cut sequence table. Drawn just past the line (below / right), which is
+          always inside the sheet: no cut sits on the far sheet edge. */}
+      {packed.cuts.map((c) => {
+        const size = CUT_LABEL_PT * ptToMm
+        const horizontal = c.fromY === c.toY
+        return (
+          <SvgText
+            key={`cut-label-${c.index}`}
+            x={(c.fromX + c.toX) / 2 + (horizontal ? 0 : size * 0.4)}
+            y={(c.fromY + c.toY) / 2 + (horizontal ? size * 1.1 : size * 0.35)}
+            textAnchor={horizontal ? 'middle' : 'start'}
+            fontSize={size}
+            fontFamily="Helvetica-Bold"
+            fill={c.kind === 'trim' ? '#737373' : '#b91c1c'}
+          >
+            {c.label}
+          </SvgText>
+        )
+      })}
     </Svg>
   )
 }

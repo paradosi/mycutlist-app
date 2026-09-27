@@ -121,6 +121,10 @@ function pickBestRect(part: ExpandedPart, freeRects: Rect[]): Choice | null {
 // larger of the two children. Kerf is added so adjacent placements respect
 // the saw blade gap.
 function splitMaxAs(free: Rect, placed: Orientation, kerfMm: number): Rect[] {
+  return splitAlong(free, placed, kerfMm, maxAsAxis(free, placed, kerfMm))
+}
+
+function maxAsAxis(free: Rect, placed: Orientation, kerfMm: number): SplitAxis {
   const remainingRight = free.w - placed.w - kerfMm
   const remainingBottom = free.h - placed.h - kerfMm
 
@@ -132,7 +136,7 @@ function splitMaxAs(free: Rect, placed: Orientation, kerfMm: number): Rect[] {
   //                   left child  = placed.w × (h - placed - kerf)
   const horizArea = free.w * Math.max(0, remainingBottom)
   const vertArea = free.h * Math.max(0, remainingRight)
-  return splitAlong(free, placed, kerfMm, horizArea >= vertArea ? 'horizontal' : 'vertical')
+  return horizArea >= vertArea ? 'horizontal' : 'vertical'
 }
 
 // Fixed-axis split used by the 'rip-first' strategy. Not one of Jylänki's
@@ -146,8 +150,14 @@ function splitRipFirst(
   kerfMm: number,
   ripAlongX: boolean,
 ): Rect[] {
-  return splitAlong(free, placed, kerfMm, ripAlongX ? 'horizontal' : 'vertical')
+  return splitAlong(free, placed, kerfMm, ripFirstAxis(ripAlongX))
 }
+
+function ripFirstAxis(ripAlongX: boolean): SplitAxis {
+  return ripAlongX ? 'horizontal' : 'vertical'
+}
+
+type SplitAxis = 'horizontal' | 'vertical'
 
 // Shared geometry for both split rules. 'horizontal' keeps a full-width
 // child below the placement; 'vertical' keeps a full-height child to its
@@ -156,7 +166,7 @@ function splitAlong(
   free: Rect,
   placed: Orientation,
   kerfMm: number,
-  axis: 'horizontal' | 'vertical',
+  axis: SplitAxis,
 ): Rect[] {
   const remainingRight = free.w - placed.w - kerfMm
   const remainingBottom = free.h - placed.h - kerfMm
@@ -238,6 +248,16 @@ interface SheetState {
   sheet: Sheet
   placed: PlacedItem[]
   free: Rect[]
+  /** Every split in the order it was made; turned into Cuts at the end. */
+  splits: SplitEvent[]
+}
+
+// A split as it happened: `placed` went into the top-left of `free`, and
+// `axis` says which child kept the full span. See buildCutSequence.
+interface SplitEvent {
+  free: Rect
+  placed: Orientation
+  axis: SplitAxis
 }
 
 function newSheetState(sheet: Sheet): SheetState {
@@ -247,11 +267,17 @@ function newSheetState(sheet: Sheet): SheetState {
     sheet,
     placed: [],
     free: [{ x: sheet.trimMm, y: sheet.trimMm, w: innerW, h: innerH }],
+    splits: [],
   }
 }
 
 function cloneState(s: SheetState): SheetState {
-  return { sheet: s.sheet, placed: s.placed.slice(), free: s.free.slice() }
+  return {
+    sheet: s.sheet,
+    placed: s.placed.slice(),
+    free: s.free.slice(),
+    splits: s.splits.slice(),
+  }
 }
 
 // Place `part` into `state.free[choice.rectIndex]`, then split and prune the
@@ -273,10 +299,12 @@ function placeInto(
     h: o.h,
     rotated: o.rotated,
   })
-  const split =
+  const axis =
     strategy === 'rip-first'
-      ? splitRipFirst(target, o, kerfMm, state.sheet.widthMm >= state.sheet.heightMm)
-      : splitMaxAs(target, o, kerfMm)
+      ? ripFirstAxis(state.sheet.widthMm >= state.sheet.heightMm)
+      : maxAsAxis(target, o, kerfMm)
+  state.splits.push({ free: target, placed: o, axis })
+  const split = splitAlong(target, o, kerfMm, axis)
   state.free = pruneContained([
     ...state.free.slice(0, choice.rectIndex),
     ...state.free.slice(choice.rectIndex + 1),
@@ -376,51 +404,131 @@ function eliminateSheets(
   return current
 }
 
-function buildCuts(
-  placedRects: Array<Rect & { partId: string }>,
-  kerfMm: number,
-): Cut[] {
-  // Phase 1: surface a coarse cut list — one rip per unique x-edge after a
-  // placement and one crosscut per unique y-edge. Useful for the cut-list
-  // table in the PDF; not load-bearing for guillotine validation.
-  const cuts: Cut[] = []
-  const seenX = new Set<number>()
-  const seenY = new Set<number>()
-  let idx = 0
-  for (const r of placedRects) {
-    const xEdge = round3(r.x + r.w)
-    if (!seenX.has(xEdge)) {
-      seenX.add(xEdge)
-      cuts.push({
-        index: idx++,
-        direction: 'rip',
-        offset: xEdge,
-        fromX: xEdge,
-        fromY: r.y,
-        toX: xEdge,
-        toY: r.y + r.h,
-      })
-    }
-    const yEdge = round3(r.y + r.h)
-    if (!seenY.has(yEdge)) {
-      seenY.add(yEdge)
-      cuts.push({
-        index: idx++,
-        direction: 'crosscut',
-        offset: yEdge,
-        fromX: r.x,
-        fromY: yEdge,
-        toX: r.x + r.w,
-        toY: yEdge,
-      })
-    }
-    void kerfMm
-  }
-  return cuts
+const EPS = 1e-6
+
+interface Piece {
+  x0: number
+  y0: number
+  x1: number
+  y1: number
 }
 
-function round3(n: number): number {
-  return Math.round(n * 1000) / 1000
+// Turn a sheet's recorded splits into numbered, edge-to-edge saw cuts in the
+// order they are made.
+//
+// Trim (only when trimMm > 0): joint the reference long edge (T1), then the
+// reference short edge (T2); these create the reference edges, so they have
+// no fence setting. Then trim a far edge only if some part reaches its trim
+// line — otherwise the untrimmed margin just stays on the offcut.
+//
+// Parts: each placement went into the top-left corner of a free rect, so the
+// part is always on the reference side of its own cuts. The full-span cut
+// (per the recorded axis) comes first, then the cut that frees the part from
+// the rest of its strip. A cut is skipped when the part already reaches the
+// edge of its piece. Split order is a valid saw order because a free rect
+// always exists as a separate piece before anything is placed in it.
+//
+// Free rects stop at the trim line, but where a far edge was never trimmed
+// the physical piece runs on to the sheet edge; cuts span to there.
+function buildCutSequence(state: SheetState): Cut[] {
+  const { sheet } = state
+  const W = sheet.widthMm
+  const H = sheet.heightMm
+  const t = sheet.trimMm
+  const ripIsHorizontal = W >= H
+
+  const cuts: Cut[] = []
+  let trimStep = 0
+  let partStep = 0
+  const push = (
+    kind: Cut['kind'],
+    line: 'horizontal' | 'vertical',
+    at: number,
+    span: [number, number],
+    fenceMm: number | null,
+  ): void => {
+    const label = kind === 'trim' ? `T${++trimStep}` : `${++partStep}`
+    const horizontal = line === 'horizontal'
+    cuts.push({
+      index: cuts.length,
+      kind,
+      label,
+      direction: horizontal === ripIsHorizontal ? 'rip' : 'crosscut',
+      offset: at,
+      fenceMm,
+      fromX: horizontal ? span[0] : at,
+      fromY: horizontal ? at : span[0],
+      toX: horizontal ? span[1] : at,
+      toY: horizontal ? at : span[1],
+    })
+  }
+
+  const trimFarX =
+    t > 0 && state.placed.some((p) => p.x + p.w >= W - t - EPS)
+  const trimFarY =
+    t > 0 && state.placed.some((p) => p.y + p.h >= H - t - EPS)
+
+  if (t > 0) {
+    const piece: Piece = { x0: 0, y0: 0, x1: W, y1: H }
+    const trimY = (at: number, fence: number | null): void =>
+      push('trim', 'horizontal', at, [piece.x0, piece.x1], fence)
+    const trimX = (at: number, fence: number | null): void =>
+      push('trim', 'vertical', at, [piece.y0, piece.y1], fence)
+
+    // Reference long edge, then reference short edge.
+    const jointY = (): void => {
+      trimY(t, null)
+      piece.y0 = t
+    }
+    const jointX = (): void => {
+      trimX(t, null)
+      piece.x0 = t
+    }
+    const farY = (): void => {
+      if (!trimFarY) return
+      trimY(H - t, H - t - piece.y0)
+      piece.y1 = H - t
+    }
+    const farX = (): void => {
+      if (!trimFarX) return
+      trimX(W - t, W - t - piece.x0)
+      piece.x1 = W - t
+    }
+    if (ripIsHorizontal) {
+      jointY()
+      jointX()
+      farY()
+      farX()
+    } else {
+      jointX()
+      jointY()
+      farX()
+      farY()
+    }
+  }
+
+  const physical = (f: Rect): Piece => ({
+    x0: f.x,
+    y0: f.y,
+    x1: !trimFarX && t > 0 && Math.abs(f.x + f.w - (W - t)) < EPS ? W : f.x + f.w,
+    y1: !trimFarY && t > 0 && Math.abs(f.y + f.h - (H - t)) < EPS ? H : f.y + f.h,
+  })
+
+  for (const { free, placed, axis } of state.splits) {
+    const p = physical(free)
+    const cx = free.x + placed.w
+    const cy = free.y + placed.h
+    const needH = cy < p.y1 - EPS
+    const needV = cx < p.x1 - EPS
+    if (axis === 'horizontal') {
+      if (needH) push('part', 'horizontal', cy, [p.x0, p.x1], cy - p.y0)
+      if (needV) push('part', 'vertical', cx, [p.y0, needH ? cy : p.y1], cx - p.x0)
+    } else {
+      if (needV) push('part', 'vertical', cx, [p.y0, p.y1], cx - p.x0)
+      if (needH) push('part', 'horizontal', cy, [p.x0, needV ? cx : p.x1], cy - p.y0)
+    }
+  }
+  return cuts
 }
 
 function buildOffcuts(remaining: Rect[]): Offcut[] {
@@ -472,10 +580,7 @@ export function guillotinePack(input: OptimizerInput): OptimizerResult {
           rotated: p.rotated,
         }),
       ),
-      cuts: buildCuts(
-        state.placed.map((p) => ({ partId: p.part.partId, x: p.x, y: p.y, w: p.w, h: p.h })),
-        input.kerfMm,
-      ),
+      cuts: buildCutSequence(state),
       offcuts: buildOffcuts(state.free),
     }
   })

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import fc from 'fast-check'
 import { guillotinePack, __test } from './guillotine'
-import type { CutStrategy, OptimizerInput, Part, Sheet, Material } from '@/types'
+import type { Cut, CutStrategy, OptimizerInput, Part, Sheet, Material } from '@/types'
 
 const MATERIAL: Material = {
   id: 'mat-1',
@@ -556,6 +556,178 @@ describe('guillotinePack — accounting', () => {
         },
       ),
       { numRuns: 200 },
+    )
+  })
+})
+
+describe('guillotinePack — cut sequence', () => {
+  function part(id: string, widthMm: number, heightMm: number): Part {
+    return { id, label: id, materialId: MATERIAL.id, widthMm, heightMm, quantity: 1, grain: 'with', rotationLocked: false }
+  }
+  function sheetOf(widthMm: number, heightMm: number, trimMm: number): Sheet {
+    return { id: 's', materialId: MATERIAL.id, widthMm, heightMm, quantity: 1, trimMm }
+  }
+  const brief = (c: Cut) => ({
+    label: c.label,
+    direction: c.direction,
+    offset: c.offset,
+    fenceMm: c.fenceMm,
+    from: [c.fromX, c.fromY],
+    to: [c.toX, c.toY],
+  })
+
+  it('joints the reference long edge then short edge, and skips far trims no part reaches', () => {
+    const sheet = sheetOf(2440, 1220, 10)
+    const { cuts } = guillotinePack(buildInput([part('A', 1000, 500)], [sheet], 0)).packedSheets[0]
+    expect(cuts.map(brief)).toEqual([
+      { label: 'T1', direction: 'rip', offset: 10, fenceMm: null, from: [0, 10], to: [2440, 10] },
+      { label: 'T2', direction: 'crosscut', offset: 10, fenceMm: null, from: [10, 10], to: [10, 1220] },
+      // MAXAS keeps the right-hand strip full height. The far edges were never
+      // trimmed, so the physical piece — and the cut — runs to the sheet edge.
+      { label: '1', direction: 'crosscut', offset: 1010, fenceMm: 1000, from: [1010, 10], to: [1010, 1220] },
+      { label: '2', direction: 'rip', offset: 510, fenceMm: 500, from: [10, 510], to: [1010, 510] },
+    ])
+  })
+
+  it('trims a far edge only when a part reaches its trim line, fenced across the whole piece', () => {
+    // Two parts side by side fill the usable width exactly (1200 + 20 kerf +
+    // 1200 = 2420), so the far short edge must be trimmed; nothing reaches the
+    // far long edge.
+    const sheet = sheetOf(2440, 1220, 10)
+    const result = guillotinePack(
+      buildInput([part('A', 1200, 500), part('B', 1200, 400)], [sheet], 20, 'rip-first'),
+    )
+    const cuts = result.packedSheets[0].cuts
+    const trims = cuts.filter((c) => c.kind === 'trim').map(brief)
+    expect(trims).toEqual([
+      { label: 'T1', direction: 'rip', offset: 10, fenceMm: null, from: [0, 10], to: [2440, 10] },
+      { label: 'T2', direction: 'crosscut', offset: 10, fenceMm: null, from: [10, 10], to: [10, 1220] },
+      // Fence is the whole piece (2420), not either part.
+      { label: 'T3', direction: 'crosscut', offset: 2430, fenceMm: 2420, from: [2430, 10], to: [2430, 1220] },
+    ])
+    // No part cut lands on the far short edge: the trim already made it.
+    expect(cuts.some((c) => c.kind === 'part' && c.direction === 'crosscut' && c.offset === 2430)).toBe(false)
+  })
+
+  it('joints the long edge first on a portrait sheet', () => {
+    const { cuts } = guillotinePack(buildInput([part('A', 500, 1000)], [sheetOf(1220, 2440, 10)], 0)).packedSheets[0]
+    expect(cuts.slice(0, 2).map(brief)).toEqual([
+      { label: 'T1', direction: 'rip', offset: 10, fenceMm: null, from: [10, 0], to: [10, 2440] },
+      { label: 'T2', direction: 'crosscut', offset: 10, fenceMm: null, from: [10, 10], to: [1220, 10] },
+    ])
+  })
+
+  it('fences a part on the far side of a split from its own piece, not the sheet', () => {
+    // Rip-first, no trim. A is ripped off first; B then lands in the
+    // remainder, on the far side of A's rip and its kerf.
+    const kerf = 3.175
+    const result = guillotinePack(
+      buildInput([part('A', 2000, 600), part('B', 1500, 400)], [sheetOf(2440, 1220, 0)], kerf, 'rip-first'),
+    )
+    const { placements, cuts } = result.packedSheets[0]
+    expect(placements.find((p) => p.partId === 'B')).toMatchObject({ x: 0, y: 600 + kerf })
+    expect(cuts.map(brief)).toEqual([
+      // A's rip: A is on the fence side, the remainder falls off past the blade.
+      { label: '1', direction: 'rip', offset: 600, fenceMm: 600, from: [0, 600], to: [2440, 600] },
+      { label: '2', direction: 'crosscut', offset: 2000, fenceMm: 2000, from: [2000, 0], to: [2000, 600] },
+      // B's rip runs edge-to-edge across the remainder. Its fence is measured
+      // from the remainder's reference edge (A's rip plus kerf) — 400 — not
+      // from the sheet edge, where the line sits at 1003.175.
+      { label: '3', direction: 'rip', offset: 600 + kerf + 400, fenceMm: 400, from: [0, 600 + kerf + 400], to: [2440, 600 + kerf + 400] },
+      { label: '4', direction: 'crosscut', offset: 1500, fenceMm: 1500, from: [1500, 600 + kerf], to: [1500, 600 + kerf + 400] },
+    ])
+  })
+
+  it('every cut divides an existing piece edge-to-edge, fenced from its reference edge, freeing each part exactly', () => {
+    const EPS = 1e-6
+    fc.assert(
+      fc.property(
+        fc.array(
+          fc.record({
+            widthMm: fc.integer({ min: 50, max: 1400 }),
+            heightMm: fc.integer({ min: 50, max: 900 }),
+            quantity: fc.integer({ min: 1, max: 3 }),
+            grain: fc.constantFrom<Part['grain']>('none', 'either', 'with', 'across'),
+          }),
+          { minLength: 1, maxLength: 8 },
+        ),
+        fc.array(
+          fc.record({
+            widthMm: fc.integer({ min: 600, max: 2500 }),
+            heightMm: fc.integer({ min: 600, max: 2500 }),
+            quantity: fc.integer({ min: 1, max: 3 }),
+            trimMm: fc.constantFrom(0, 3.175, 10),
+          }),
+          { minLength: 1, maxLength: 3 },
+        ),
+        fc.constantFrom(0, 1, 3.175),
+        fc.constantFrom<CutStrategy>('yield', 'rip-first'),
+        (rawParts, rawSheets, kerfMm, cutStrategy) => {
+          const parts: Part[] = rawParts.map((p, i) => ({
+            ...p, id: `p${i}`, label: `P${i}`, materialId: MATERIAL.id, rotationLocked: false,
+          }))
+          const sheets: Sheet[] = rawSheets.map((s, i) => ({ ...s, id: `s${i}`, materialId: MATERIAL.id }))
+          const result = guillotinePack(buildInput(parts, sheets, kerfMm, cutStrategy))
+
+          for (const ps of result.packedSheets) {
+            const sheet = sheets.find((s) => s.id === ps.sheetId)!
+            const ripIsHorizontal = sheet.widthMm >= sheet.heightMm
+            type P = { x0: number; y0: number; x1: number; y1: number }
+            let pieces: P[] = [{ x0: 0, y0: 0, x1: sheet.widthMm, y1: sheet.heightMm }]
+
+            // Numbering: trims first as T1..Tn, then part cuts 1..m.
+            const trims = ps.cuts.filter((c) => c.kind === 'trim')
+            expect(trims.length === 0).toBe(sheet.trimMm === 0)
+            expect(ps.cuts.map((c) => c.label)).toEqual([
+              ...trims.map((_, i) => `T${i + 1}`),
+              ...ps.cuts.filter((c) => c.kind === 'part').map((_, i) => `${i + 1}`),
+            ])
+            ps.cuts.forEach((c, i) => expect(c.index).toBe(i))
+
+            for (const c of ps.cuts) {
+              const horizontal = c.fromY === c.toY
+              expect(c.direction).toBe(horizontal === ripIsHorizontal ? 'rip' : 'crosscut')
+              const a = horizontal ? c.fromX : c.fromY
+              const b = horizontal ? c.toX : c.toY
+              const at = c.offset
+              const hits = pieces.filter((p) =>
+                horizontal
+                  ? Math.abs(p.x0 - a) < EPS && Math.abs(p.x1 - b) < EPS && p.y0 + EPS < at && at < p.y1 - EPS
+                  : Math.abs(p.y0 - a) < EPS && Math.abs(p.y1 - b) < EPS && p.x0 + EPS < at && at < p.x1 - EPS,
+              )
+              // Edge-to-edge across exactly one piece that exists right now.
+              expect(hits).toHaveLength(1)
+              const piece = hits[0]
+              const refEdge = horizontal ? piece.y0 : piece.x0
+              // Jointing trims (fence null) keep the far side; the blade is on
+              // the near, waste side. Every other cut keeps the reference side.
+              const jointing = c.fenceMm === null
+              expect(jointing).toBe(c.kind === 'trim' && (c.label === 'T1' || c.label === 'T2'))
+              if (!jointing) expect(c.fenceMm!).toBeCloseTo(at - refEdge, 6)
+              const nearEnd = jointing ? at - kerfMm : at
+              const farStart = jointing ? at : at + kerfMm
+              const near = horizontal ? { ...piece, y1: nearEnd } : { ...piece, x1: nearEnd }
+              const far = horizontal ? { ...piece, y0: farStart } : { ...piece, x0: farStart }
+              pieces = pieces
+                .filter((p) => p !== piece)
+                .concat([near, far].filter((p) => p.x1 - p.x0 > EPS && p.y1 - p.y0 > EPS))
+            }
+
+            // Each placed part is exactly one piece — nothing left to cut off.
+            for (const pl of ps.placements) {
+              const pt = parts.find((p) => p.id === pl.partId)!
+              const { w, h } = dimsFor(pt, pl.rotated)
+              const match = pieces.filter(
+                (p) =>
+                  Math.abs(p.x0 - pl.x) < EPS && Math.abs(p.y0 - pl.y) < EPS &&
+                  Math.abs(p.x1 - (pl.x + w)) < EPS && Math.abs(p.y1 - (pl.y + h)) < EPS,
+              )
+              expect(match).toHaveLength(1)
+            }
+          }
+        },
+      ),
+      { numRuns: 300 },
     )
   })
 })

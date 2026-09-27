@@ -44,10 +44,29 @@ export interface Placement {
   rotated: boolean
 }
 
+// One saw cut, in the order it is made. Every cut runs edge-to-edge across
+// the piece it divides (the sheet, or a piece left by earlier cuts).
+//
+// A piece's reference edges are its low-x and low-y edges: a jointed trim, an
+// earlier saw cut, or a factory edge when there is no trim. The fence is set
+// from the reference edge to the cut line.
 export interface Cut {
+  /** 0-based position in the full sequence, trims first. */
   index: number
+  /** 'trim' squares up the sheet edges; 'part' separates parts and offcuts. */
+  kind: 'trim' | 'part'
+  /** Display label: "T1", "T2", ... for trims, "1", "2", ... for part cuts. */
+  label: string
+  /** 'rip' runs along the sheet's long axis, 'crosscut' across it. */
   direction: 'rip' | 'crosscut'
+  /** Absolute position of the cut line, mm from the sheet's x=0 or y=0 edge. */
   offset: number
+  /**
+   * Fence setting in mm: distance from the reference edge of the piece being
+   * cut to the cut line. null for the two jointing trims (T1, T2), which
+   * create the reference edges rather than cutting from them.
+   */
+  fenceMm: number | null
   fromX: number
   fromY: number
   toX: number
