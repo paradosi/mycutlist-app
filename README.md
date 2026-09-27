@@ -41,6 +41,9 @@ saws — with a UI that explains every domain term inline.
   materials, preview before commit
 - **Cost stat** when materials have `costPerSheet` set
 - **IndexedDB persistence** — your project survives a refresh
+- **Clear** — clear just the parts, or start over with a blank project
+  (your materials library stays); both confirm first and can be undone for
+  a few seconds
 
 ## Stack
 

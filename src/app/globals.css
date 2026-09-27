@@ -24,3 +24,20 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Undo toast: slide up on entry; the bar under it drains over the Undo
+   window (UNDO_TOAST_MS in components/ui/undo-toast.tsx) and pauses with it. */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes toast-countdown {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+.toast-in { animation: toast-in 160ms ease-out; }
+.toast-countdown { animation: toast-countdown 8000ms linear forwards; }
+.toast-countdown[data-paused] { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .toast-in { animation: none; }
+}

@@ -64,6 +64,10 @@ export interface ProjectStore {
   setResults: (results: OptimizerResult) => void
   clearResults: () => void
 
+  /** Remove every part and the results; sheets and settings stay. */
+  clearParts: () => void
+  /** Replace the project wholesale — used by Undo after a clear. */
+  restoreProject: (project: Project) => void
   newProject: () => void
 }
 
@@ -162,6 +166,19 @@ export const useProjectStore = create<ProjectStore>()(
       clearResults: () =>
         set((s) => {
           s.project.results = undefined
+        }),
+
+      clearParts: () =>
+        set((s) => {
+          s.project.parts = []
+          s.project.results = undefined
+          s.isDirty = true
+        }),
+
+      restoreProject: (project) =>
+        set((s) => {
+          s.project = project
+          s.isDirty = true
         }),
 
       newProject: () =>

@@ -11,6 +11,8 @@ import { SheetStockManager } from '@/components/layout/SheetStockManager'
 import { MaterialsEditor } from '@/components/layout/MaterialsEditor'
 import { OptimizerControls } from '@/components/layout/OptimizerControls'
 import { UnplacedPartsCallout } from '@/components/layout/UnplacedPartsCallout'
+import { ClearProjectDialog, type ClearKind } from '@/components/layout/ClearProjectDialog'
+import { UndoToast } from '@/components/ui/undo-toast'
 import { SheetLayoutRenderer } from '@/components/renderer/SheetLayoutRenderer'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -56,7 +58,7 @@ function UnitHelp() {
     </HelpTip>
   )
 }
-import type { OptimizerInput, Unit } from '@/types'
+import type { OptimizerInput, Project, Unit } from '@/types'
 
 const PdfDownloadButton = dynamic(
   () => import('@/components/pdf/PdfDownloadButton').then((m) => m.PdfDownloadButton),
@@ -74,8 +76,38 @@ export default function Home() {
   const setResults = useProjectStore((s) => s.setResults)
   const clearResults = useProjectStore((s) => s.clearResults)
   const updateSheet = useProjectStore((s) => s.updateSheet)
+  const clearParts = useProjectStore((s) => s.clearParts)
+  const newProject = useProjectStore((s) => s.newProject)
+  const restoreProject = useProjectStore((s) => s.restoreProject)
 
-  const { optimize, cancel, isRunning, progress, result, error } = useOptimizer()
+  const { optimize, cancel, reset, isRunning, progress, result, error } = useOptimizer()
+  const [clearOpen, setClearOpen] = React.useState(false)
+  const [undo, setUndo] = React.useState<{
+    id: number
+    message: string
+    snapshot: Project
+  } | null>(null)
+
+  const handleClear = React.useCallback(
+    (kind: ClearKind) => {
+      const snapshot = useProjectStore.getState().project
+      reset()
+      if (kind === 'parts') clearParts()
+      else newProject()
+      setClearOpen(false)
+      setUndo({
+        id: Date.now(),
+        message: kind === 'parts' ? 'Parts cleared.' : 'Started a new project.',
+        snapshot,
+      })
+    },
+    [reset, clearParts, newProject],
+  )
+  const handleUndo = React.useCallback(() => {
+    if (undo) restoreProject(undo.snapshot)
+    setUndo(null)
+  }, [undo, restoreProject])
+  const dismissUndo = React.useCallback(() => setUndo(null), [])
   const [tab, setTab] = React.useState<Tab>('parts')
   const resultsRef = React.useRef<HTMLElement>(null)
 
@@ -129,6 +161,26 @@ export default function Home() {
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9"
+              onClick={() => setClearOpen(true)}
+            >
+              <svg
+                aria-hidden
+                viewBox="0 0 16 16"
+                className="h-3.5 w-3.5 text-neutral-500"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M2.5 4.5h11M6 4.5V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.5M4 4.5l.7 8.6a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9l.7-8.6" />
+              </svg>
+              Clear
+            </Button>
             <Select
               value={project.unit}
               onChange={(e) => setUnit(e.target.value as Unit)}
@@ -293,6 +345,25 @@ export default function Home() {
           )}
         </section>
       </main>
+
+      {clearOpen && (
+        <ClearProjectDialog
+          projectName={project.name}
+          partCount={project.parts.length}
+          sheetCount={project.sheets.length}
+          hasResults={!!(result ?? project.results)}
+          onConfirm={handleClear}
+          onCancel={() => setClearOpen(false)}
+        />
+      )}
+      {undo && (
+        <UndoToast
+          key={undo.id}
+          message={undo.message}
+          onUndo={handleUndo}
+          onDismiss={dismissUndo}
+        />
+      )}
     </div>
   )
 }
