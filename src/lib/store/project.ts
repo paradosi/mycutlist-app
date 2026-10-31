@@ -75,6 +75,16 @@ const STORAGE_KEY = 'cutlist-optimizer:project'
 
 const persistAvailable = typeof window !== 'undefined' && typeof indexedDB !== 'undefined'
 
+/** Inputs changed, so the layout we are holding no longer describes them.
+ *
+ *  Results are cleared HERE rather than at the renderer because the stale layout is
+ *  persisted: it survived a reload, it printed, and deleting a part made it vanish from
+ *  the drawing while the banner still read "All parts placed" — a woodworker could cut
+ *  from a layout that no longer matched the list. */
+const invalidateResults = (s: ProjectStore) => {
+  s.project.results = undefined
+}
+
 export const useProjectStore = create<ProjectStore>()(
   persist(
     immer((set) => ({
@@ -96,24 +106,28 @@ export const useProjectStore = create<ProjectStore>()(
       setKerf: (kerfMm) =>
         set((s) => {
           s.project.kerfMm = kerfMm
+          invalidateResults(s)
           s.isDirty = true
         }),
 
       setCutStrategy: (strategy) =>
         set((s) => {
           s.project.cutStrategy = strategy
+          invalidateResults(s)
           s.isDirty = true
         }),
 
       setAlgorithm: (algorithm) =>
         set((s) => {
           s.project.algorithm = algorithm
+          invalidateResults(s)
           s.isDirty = true
         }),
 
       addSheet: (sheet) =>
         set((s) => {
           s.project.sheets.push({ ...sheet, id: newId() })
+          invalidateResults(s)
           s.isDirty = true
         }),
 
@@ -121,18 +135,21 @@ export const useProjectStore = create<ProjectStore>()(
         set((s) => {
           const sh = s.project.sheets.find((x) => x.id === id)
           if (sh) Object.assign(sh, updates)
+          invalidateResults(s)
           s.isDirty = true
         }),
 
       removeSheet: (id) =>
         set((s) => {
           s.project.sheets = s.project.sheets.filter((x) => x.id !== id)
+          invalidateResults(s)
           s.isDirty = true
         }),
 
       addPart: (part) =>
         set((s) => {
           s.project.parts.push({ ...part, id: newId() })
+          invalidateResults(s)
           s.isDirty = true
         }),
 
@@ -140,12 +157,14 @@ export const useProjectStore = create<ProjectStore>()(
         set((s) => {
           const p = s.project.parts.find((x) => x.id === id)
           if (p) Object.assign(p, updates)
+          invalidateResults(s)
           s.isDirty = true
         }),
 
       removePart: (id) =>
         set((s) => {
           s.project.parts = s.project.parts.filter((x) => x.id !== id)
+          invalidateResults(s)
           s.isDirty = true
         }),
 
@@ -154,6 +173,7 @@ export const useProjectStore = create<ProjectStore>()(
           const p = s.project.parts.find((x) => x.id === id)
           if (p) {
             s.project.parts.push({ ...p, id: newId() })
+            invalidateResults(s)
             s.isDirty = true
           }
         }),

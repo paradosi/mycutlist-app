@@ -64,3 +64,47 @@ describe('project store — clearing', () => {
     }
   })
 })
+
+  describe('project store — a changed input invalidates the layout', () => {
+    beforeEach(seed)
+
+    it('editing a part clears the stale layout', () => {
+      const id = useProjectStore.getState().project.parts[0].id
+      useProjectStore.getState().updatePart(id, { widthMm: 999 })
+      expect(useProjectStore.getState().project.results).toBeUndefined()
+    })
+
+    it('deleting a part clears it — the drawing must not keep placements for a part that is gone', () => {
+      const id = useProjectStore.getState().project.parts[0].id
+      useProjectStore.getState().removePart(id)
+      expect(useProjectStore.getState().project.results).toBeUndefined()
+    })
+
+    it('adding or duplicating a part clears it', () => {
+      useProjectStore.getState().addPart({
+        label: 'Rail', materialId: 'mat-seed-ply-3-4', widthMm: 300, heightMm: 100,
+        quantity: 1, grain: 'either', rotationLocked: false,
+      })
+      expect(useProjectStore.getState().project.results).toBeUndefined()
+
+      seed()
+      useProjectStore.getState().duplicatePart(useProjectStore.getState().project.parts[0].id)
+      expect(useProjectStore.getState().project.results).toBeUndefined()
+    })
+
+    it('changing a sheet or the kerf clears it', () => {
+      useProjectStore.getState().setKerf(4)
+      expect(useProjectStore.getState().project.results).toBeUndefined()
+
+      seed()
+      const sheetId = useProjectStore.getState().project.sheets[0].id
+      useProjectStore.getState().updateSheet(sheetId, { widthMm: 2500 })
+      expect(useProjectStore.getState().project.results).toBeUndefined()
+    })
+
+    it('a cosmetic change leaves the layout alone (renaming, switching display units)', () => {
+      useProjectStore.getState().setProjectName('Something else')
+      useProjectStore.getState().setUnit('in')
+      expect(useProjectStore.getState().project.results).toBeDefined()
+    })
+  })
